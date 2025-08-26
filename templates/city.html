@@ -1,18 +1,26 @@
 {% extends "layout.html" %}
 
 {% block content %}
-<div class="container">
-    <h1>Weather Forecast for {{ city.name }}</h1>
-    {% if weather.current_weather %}
-        <h3>Current Weather</h3>
-        <ul>
-            <li>Temperature: {{ weather.current_weather.temperature }} °C</li>
-            <li>Windspeed: {{ weather.current_weather.windspeed }} km/h</li>
-            <li>Weather Code: {{ weather.current_weather.weathercode }}</li>
-        </ul>
-    {% else %}
-        <p>Weather data is not available for this city.</p>
-    {% endif %}
-    <a href="/">&#8592; Back to main page</a>
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow mb-4">
+            <div class="card-header bg-primary text-white">
+                <h1 class="mb-0">Weather Forecast for {{ city.name }}</h1>
+            </div>
+            <div class="card-body">
+                {% if weather.current_weather %}
+                    <h5 class="card-title">Current Weather</h5>
+                    <ul class="list-group list-group-flush mb-3">
+                        <li class="list-group-item">Temperature: <strong>{{ weather.current_weather.temperature }} °C</strong></li>
+                        <li class="list-group-item">Windspeed: <strong>{{ weather.current_weather.windspeed }} km/h</strong></li>
+                        <li class="list-group-item">Weather Code: <strong>{{ weather.current_weather.weathercode }}</strong></li>
+                    </ul>
+                {% else %}
+                    <div class="alert alert-warning">Weather data is not available for this city.</div>
+                {% endif %}
+                <a href="/" class="btn btn-outline-primary mt-2">&#8592; Back to main page</a>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
