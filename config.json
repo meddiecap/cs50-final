@@ -1,0 +1,22 @@
+{
+  "CITIES": [
+    {"name": "Vancouver", "lat": 49.2827, "lon": -123.1207},
+    {"name": "New York", "lat": 40.7128, "lon": -74.0060},
+    {"name": "London", "lat": 51.5074, "lon": -0.1278},
+    {"name": "Tokyo", "lat": 35.6895, "lon": 139.6917},
+    {"name": "Sydney", "lat": -33.8688, "lon": 151.2093},
+    {"name": "Paris", "lat": 48.8566, "lon": 2.3522},
+    {"name": "Cairo", "lat": 30.0444, "lon": 31.2357},
+    {"name": "Rio de Janeiro", "lat": -22.9068, "lon": -43.1729},
+    {"name": "Moscow", "lat": 55.7558, "lon": 37.6173},
+    {"name": "Mumbai", "lat": 19.0760, "lon": 72.8777}
+  ],
+  "STYLES": [
+    "Shakespearean Style",
+    "Noir Detective Style",
+    "Sci-Fi Futuristic Style",
+    "Children’s Storybook Style",
+    "Pirate Style",
+    "Normal Weather Report Style"
+  ]
+}

@@ -1,3 +1,19 @@
+from datetime import datetime
+# In-memory cache: {(city, style, time_period): report}
+ai_report_cache = {}
+
+# Helper to determine time of day
+def get_time_period():
+	hour = datetime.now().hour
+	if 5 <= hour < 11:
+		return "morning"
+	elif 11 <= hour < 16:
+		return "midday"
+	elif 16 <= hour < 21:
+		return "evening"
+	else:
+		return "night"
+	
 from flask import Flask, render_template_string, request, jsonify
 import requests
 from google import genai
@@ -5,33 +21,18 @@ from google import genai
 from dotenv import load_dotenv
 load_dotenv()
 
+
 import json
 import os
 
 app = Flask(__name__)
 
-# List of 10 major cities with their coordinates
-CITIES = [
-	{"name": "Vancouver", "lat": 49.2827, "lon": -123.1207},
-	{"name": "New York", "lat": 40.7128, "lon": -74.0060},
-	{"name": "London", "lat": 51.5074, "lon": -0.1278},
-	{"name": "Tokyo", "lat": 35.6895, "lon": 139.6917},
-	{"name": "Sydney", "lat": -33.8688, "lon": 151.2093},
-	{"name": "Paris", "lat": 48.8566, "lon": 2.3522},
-	{"name": "Cairo", "lat": 30.0444, "lon": 31.2357},
-	{"name": "Rio de Janeiro", "lat": -22.9068, "lon": -43.1729},
-	{"name": "Moscow", "lat": 55.7558, "lon": 37.6173},
-	{"name": "Mumbai", "lat": 19.0760, "lon": 72.8777},
-]
+# Load CITIES and STYLES from config.json
+with open("config.json", encoding="utf-8") as f:
+	config = json.load(f)
 
-STYLES = [
-	"Shakespearean Style",
-	"Noir Detective Style",
-	"Sci-Fi Futuristic Style",
-	"Children’s Storybook Style",
-	"Pirate Style",
-	"Normal Weather Report Style"
-]
+CITIES = config["CITIES"]
+STYLES = config["STYLES"]
 
 def get_weather(city):
 	url = (
@@ -45,20 +46,19 @@ def get_weather(city):
 
 @app.route("/")
 def index():
-	# Only send city names, not weather data
 	city_names = [city["name"] for city in CITIES]
 	return render_template_string(TEMPLATE, cities=city_names, styles=STYLES)
-
-# Dummy LLM API call (replace with your actual LLM API integration)
 
 
 def call_llm_api(city, weather, style):
 	"""
 	Calls Google Gemini API (using google-genai client) to generate a weather report in the selected style.
 	"""
-	api_key = os.environ.get("GEMINI_API_KEY")
-	if not api_key:
+	GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+	if not GEMINI_API_KEY:
 		return "[Error: GEMINI_API_KEY not set in environment.]"
+	
+	GEMINI_API_MODEL = os.environ.get("GEMINI_API_MODEL", "gemini-2.5-flash")
 	
 	from datetime import datetime, timedelta
 	import zoneinfo
@@ -67,25 +67,18 @@ def call_llm_api(city, weather, style):
 	now = datetime.now(tz)
 	local_date = now.strftime("%Y-%m-%d")
 	tomorrow_date = (now + timedelta(days=1)).strftime("%Y-%m-%d")
-
-	current_time_of_day = (
-		"morning" if 5 <= now.hour < 12 else
-		"midday" if 12 <= now.hour < 17 else
-		"evening" if 17 <= now.hour < 24 else
-		"night"
-	)
 	
 	weather_json = json.dumps(weather, indent=2)
 
 	prompt = f"""
 	ROLE: You are a creative weather editor for a website.
-	Write a weather report for {city} in {style}. Use 200-250 words max.
+	Write a weather report for {city} in {style}. Use at least 200 words. 250 words max.
 
 	Context:
 	- timezone: {tz}
 	- local_date: {local_date}
 	- tomorrow_date: {tomorrow_date}
-	- current_time_of_day: {current_time_of_day}
+	- current_time_of_day: {get_time_period()}
 
 	Hard rules (must follow):
 	- If current_time_of_day in ["evening","night"]: 
@@ -99,8 +92,8 @@ def call_llm_api(city, weather, style):
 
 	Weather JSON:
 	{weather_json}
-
-	STYLE:
+		city_names = [city["name"] for city in CITIES]
+		return render_template("index.html", cities=city_names, styles=STYLES)
 	- Always write in the requested style: {style}.
 	- If style == "Normal Weather Report Style":
 	• Use a friendly, engaging, newsletter/blog tone (not dry newsroom).
@@ -115,9 +108,9 @@ def call_llm_api(city, weather, style):
 	"""
 	
 	try:
-		client = genai.Client(api_key=api_key)
+		client = genai.Client(api_key=GEMINI_API_KEY)
 		response = client.models.generate_content(
-			model="gemini-2.5-flash",
+			model=GEMINI_API_MODEL,
 			contents=prompt
 		)
 		# The response object may have .text or .candidates[0].content.parts[0].text
@@ -137,13 +130,25 @@ def generate_report():
 	data = request.json
 	city_name = data.get("city")
 	style = data.get("style")
+
 	# Find city info
 	city = next((c for c in CITIES if c["name"] == city_name), None)
 	if not city:
 		return jsonify({"error": "City not found"}), 400
+	time_period = get_time_period()
+	cache_key = (city_name, style, time_period)
+
+	# Check cache
+	if cache_key in ai_report_cache:
+		weather = get_weather(city)  # Always get fresh weather
+		return jsonify({"report": ai_report_cache[cache_key], "weather": weather, "cached": True})
+	
+	# Not cached, call AI
 	weather = get_weather(city)
 	report = call_llm_api(city_name, weather, style)
-	return jsonify({"report": report, "weather": weather})
+	ai_report_cache[cache_key] = report
+
+	return jsonify({"report": report, "weather": weather, "cached": False})
 
 # Simple HTML template with inline JS
 TEMPLATE = '''
