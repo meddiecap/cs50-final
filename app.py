@@ -1,4 +1,3 @@
-# Route for /<city> to show today's forecast for that city
 from flask import abort
 
 from datetime import datetime
@@ -25,6 +24,21 @@ def index():
 	city_names = [city["name"] for city in CITIES]
 	return render_template("index.html", cities=city_names, styles=STYLES)
 
+# Endpoint to get weather for arbitrary lat/lon (for user's location)
+@app.route("/weather_at_location")
+def weather_at_location():
+	try:
+		lat = float(request.args.get("lat"))
+		lon = float(request.args.get("lon"))
+	except (TypeError, ValueError):
+		return jsonify({"error": "Invalid or missing lat/lon"}), 400
+	# Use a dummy city dict for get_weather
+	city = {"name": "Your Location", "lat": lat, "lon": lon}
+	weather = get_weather(city)
+	return jsonify({"weather": weather})
+
+
+# Route for /<city> to show today's forecast for that city
 @app.route("/<city_name>")
 def city_forecast(city_name):
 	# Find city by name (case-insensitive match)

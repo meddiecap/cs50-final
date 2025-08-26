@@ -3,6 +3,16 @@
 {% block content %}
 <div class="row justify-content-center mb-4">
 	<div class="col-lg-8">
+		<!-- User Location Card -->
+		<div class="card shadow-sm mb-4" id="locationCard" style="display:none;">
+			<div class="card-header bg-success text-white">
+				<h5 class="mb-0">Your Current Location</h5>
+			</div>
+			<div class="card-body" id="locationWeatherBody">
+				<div class="spinner-border text-success" role="status"><span class="visually-hidden">Loading...</span></div>
+			</div>
+		</div>
+		<!-- Main Weather Card -->
 		<div class="card shadow-sm mb-4">
 			<div class="card-header bg-primary text-white">
 				<h1 class="mb-0">Weather for 10 Major Cities</h1>
@@ -61,6 +71,38 @@
 	</div>
 </div>
 <script>
+	// User location weather card logic
+	window.addEventListener('DOMContentLoaded', function() {
+		if (navigator.geolocation) {
+			navigator.geolocation.getCurrentPosition(function(pos) {
+				const lat = pos.coords.latitude;
+				const lon = pos.coords.longitude;
+				fetch(`/weather_at_location?lat=${lat}&lon=${lon}`)
+					.then(res => res.json())
+					.then(data => {
+						const card = document.getElementById('locationCard');
+						const body = document.getElementById('locationWeatherBody');
+						card.style.display = '';
+						if (data.weather && data.weather.current_weather) {
+							body.innerHTML = `
+								<h6>Temperature: <strong>${data.weather.current_weather.temperature} °C</strong></h6>
+								<h6>Windspeed: <strong>${data.weather.current_weather.windspeed} km/h</strong></h6>
+								<h6>Weather Code: <strong>${data.weather.current_weather.weathercode}</strong></h6>
+							`;
+						} else {
+							body.innerHTML = '<div class="alert alert-warning">Weather data is not available for your location.</div>';
+						}
+					})
+					.catch(() => {
+						const card = document.getElementById('locationCard');
+						const body = document.getElementById('locationWeatherBody');
+						card.style.display = '';
+						body.innerHTML = '<div class="alert alert-danger">Could not fetch weather for your location.</div>';
+					});
+			});
+		}
+	});
+
 	function generateReport() {
 		const cityName = document.getElementById('city').value;
 		const style = document.getElementById('style').value;
