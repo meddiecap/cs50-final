@@ -1,3 +1,6 @@
+# Route for /<city> to show today's forecast for that city
+from flask import abort
+
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify
 import json
@@ -22,6 +25,14 @@ def index():
 	city_names = [city["name"] for city in CITIES]
 	return render_template("index.html", cities=city_names, styles=STYLES)
 
+@app.route("/<city_name>")
+def city_forecast(city_name):
+	# Find city by name (case-insensitive match)
+	city = next((c for c in CITIES if c["name"].lower() == city_name.lower()), None)
+	if not city:
+		return abort(404, description="City not found")
+	weather = get_weather(city)
+	return render_template("city.html", city=city, weather=weather)
 
 @app.route("/generate_report", methods=["POST"])
 def generate_report():
