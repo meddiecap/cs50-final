@@ -1,0 +1,57 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+    <div class="container">
+		<h1>Weather for 10 Major Cities</h1>
+		<form id="reportForm" onsubmit="return false;">
+			<label for="city">City:</label>
+			<select id="city">
+				{% for c in cities %}
+				<option value="{{c}}">{{c}}</option>
+				{% endfor %}
+			</select>
+			<label for="style">Style:</label>
+			<select id="style">
+				{% for s in styles %}
+				<option value="{{s}}">{{s}}</option>
+				{% endfor %}
+			</select>
+			<button onclick="generateReport()">Generate Weather Report</button>
+		</form>
+		<div class="report-box" id="reportBox">Select a city and style, then click Generate Weather Report.</div>
+		<table class="weather-table" id="weatherTable" style="display:none;">
+			<tr>
+				<th>Temperature (°C)</th>
+				<th>Windspeed (km/h)</th>
+				<th>Weather Code</th>
+			</tr>
+			<tr>
+				<td id="tempCell"></td>
+				<td id="windCell"></td>
+				<td id="codeCell"></td>
+			</tr>
+		</table>
+	</div>
+	<script>
+		function generateReport() {
+			const cityName = document.getElementById('city').value;
+			const style = document.getElementById('style').value;
+			fetch('/generate_report', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ city: cityName, style: style })
+			})
+			.then(res => res.json())
+			.then(data => {
+				document.getElementById('reportBox').innerText = data.report;
+				// Show weather table
+				if (data.weather) {
+					document.getElementById('weatherTable').style.display = '';
+					document.getElementById('tempCell').innerText = data.weather.temperature ?? 'N/A';
+					document.getElementById('windCell').innerText = data.weather.windspeed ?? 'N/A';
+					document.getElementById('codeCell').innerText = data.weather.weathercode ?? 'N/A';
+				}
+			});
+		}
+	</script>
+{% endblock %}

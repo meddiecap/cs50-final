@@ -14,7 +14,7 @@ def get_time_period():
 	else:
 		return "night"
 	
-from flask import Flask, render_template_string, request, jsonify
+from flask import Flask, render_template, request, jsonify
 import requests
 from google import genai
 
@@ -47,7 +47,7 @@ def get_weather(city):
 @app.route("/")
 def index():
 	city_names = [city["name"] for city in CITIES]
-	return render_template_string(TEMPLATE, cities=city_names, styles=STYLES)
+	return render_template("index.html", cities=city_names, styles=STYLES)
 
 
 def call_llm_api(city, weather, style):
@@ -92,8 +92,8 @@ def call_llm_api(city, weather, style):
 
 	Weather JSON:
 	{weather_json}
-		city_names = [city["name"] for city in CITIES]
-		return render_template("index.html", cities=city_names, styles=STYLES)
+
+	STYLE:
 	- Always write in the requested style: {style}.
 	- If style == "Normal Weather Report Style":
 	• Use a friendly, engaging, newsletter/blog tone (not dry newsroom).
@@ -147,84 +147,8 @@ def generate_report():
 	weather = get_weather(city)
 	report = call_llm_api(city_name, weather, style)
 	ai_report_cache[cache_key] = report
-
+	
 	return jsonify({"report": report, "weather": weather, "cached": False})
-
-# Simple HTML template with inline JS
-TEMPLATE = '''
-<!DOCTYPE html>
-<html lang="en">
-<head>
-	<meta charset="UTF-8">
-	<title>World Weather - CS50 Final</title>
-	<style>
-		body { font-family: Arial, sans-serif; background: #f0f4f8; margin: 0; padding: 0; }
-		.container { max-width: 900px; margin: 40px auto; background: #fff; border-radius: 10px; box-shadow: 0 2px 8px #0001; padding: 30px; }
-		h1 { text-align: center; }
-		select, button { padding: 6px 12px; border-radius: 5px; border: 1px solid #bbb; }
-		.report-box { margin-top: 30px; background: #f9fafb; border-radius: 8px; padding: 20px; min-height: 80px; }
-		.weather-table { margin-top: 20px; width: 100%; border-collapse: collapse; }
-		.weather-table th, .weather-table td { padding: 10px; text-align: center; border-bottom: 1px solid #eee; }
-		.weather-table th { background: #e0e7ef; }
-	</style>
-</head>
-<body>
-	<div class="container">
-		<h1>Weather for 10 Major Cities</h1>
-		<form id="reportForm" onsubmit="return false;">
-			<label for="city">City:</label>
-			<select id="city">
-				{% for c in cities %}
-				<option value="{{c}}">{{c}}</option>
-				{% endfor %}
-			</select>
-			<label for="style">Style:</label>
-			<select id="style">
-				{% for s in styles %}
-				<option value="{{s}}">{{s}}</option>
-				{% endfor %}
-			</select>
-			<button onclick="generateReport()">Generate Weather Report</button>
-		</form>
-		<div class="report-box" id="reportBox">Select a city and style, then click Generate Weather Report.</div>
-		<table class="weather-table" id="weatherTable" style="display:none;">
-			<tr>
-				<th>Temperature (°C)</th>
-				<th>Windspeed (km/h)</th>
-				<th>Weather Code</th>
-			</tr>
-			<tr>
-				<td id="tempCell"></td>
-				<td id="windCell"></td>
-				<td id="codeCell"></td>
-			</tr>
-		</table>
-	</div>
-	<script>
-		function generateReport() {
-			const cityName = document.getElementById('city').value;
-			const style = document.getElementById('style').value;
-			fetch('/generate_report', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ city: cityName, style: style })
-			})
-			.then(res => res.json())
-			.then(data => {
-				document.getElementById('reportBox').innerText = data.report;
-				// Show weather table
-				if (data.weather) {
-					document.getElementById('weatherTable').style.display = '';
-					document.getElementById('tempCell').innerText = data.weather.temperature ?? 'N/A';
-					document.getElementById('windCell').innerText = data.weather.windspeed ?? 'N/A';
-					document.getElementById('codeCell').innerText = data.weather.weathercode ?? 'N/A';
-				}
-			});
-		}
-	</script>
-</body>
-</html>
-'''
 
 if __name__ == "__main__":
 	app.run(debug=True)
