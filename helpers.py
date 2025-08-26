@@ -35,7 +35,7 @@ def call_llm_api(city, weather, style):
 	if not GEMINI_API_KEY:
 		return "[Error: GEMINI_API_KEY not set in environment.]"
 	
-	GEMINI_API_MODEL = os.environ.get("GEMINI_API_MODEL", "gemini-2.5-flash")
+	GEMINI_API_MODEL = os.environ.get("GEMINI_API_MODEL", "gemini-2.5-flash-lite")
 	
 	from datetime import datetime, timedelta
 	import zoneinfo
