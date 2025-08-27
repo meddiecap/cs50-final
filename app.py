@@ -1,12 +1,12 @@
 from flask import abort
-
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify
 import json
+import sqlite3
+import os
 
 # Import get_time_period from helpers.py
 from helpers import get_time_period, get_weather, call_llm_api, get_user_ip
-
 
 # In-memory caches
 ai_report_cache = {}  # {(city, style, time_period): report}
@@ -14,16 +14,23 @@ ip_location_cache = {}  # {ip: {location and weather data}}
 
 app = Flask(__name__)
 
-# Load CITIES and STYLES from config.json
-with open("config.json", encoding="utf-8") as f:
-	config = json.load(f)
-
-CITIES = config["CITIES"]
-STYLES = config["STYLES"]
+DB_PATH = os.path.join(os.path.dirname(__file__), 'weather.db')
+def get_db():
+	conn = sqlite3.connect(DB_PATH)
+	conn.row_factory = sqlite3.Row
+	return conn
 
 @app.route("/")
 def index():
-	city_names = [city["name"] for city in CITIES]
+	# Load cities and styles from the database
+	conn = get_db()
+	c = conn.cursor()
+	c.execute('SELECT name FROM cities ORDER BY name')
+	city_names = [row[0] for row in c.fetchall()]
+	c.execute('SELECT name FROM styles ORDER BY name')
+	styles = [row[0] for row in c.fetchall()]
+	conn.close()
+
 	# Get user IP (support X-Forwarded-For for proxies)
 	ip = get_user_ip()
 	if ip and "," in ip:
@@ -49,7 +56,7 @@ def index():
 		except Exception:
 			user_location = {"error": "Location service error"}
 		ip_location_cache[ip] = user_location
-	return render_template("index.html", cities=city_names, styles=STYLES, user_location=user_location)
+	return render_template("index.html", cities=city_names, styles=styles, user_location=user_location)
 
 # Endpoint to get weather for arbitrary lat/lon (for user's location)
 @app.route("/weather_at_location")
@@ -59,19 +66,26 @@ def weather_at_location():
 		lon = float(request.args.get("lon"))
 	except (TypeError, ValueError):
 		return jsonify({"error": "Invalid or missing lat/lon"}), 400
+	
 	# Use a dummy city dict for get_weather
 	city = {"name": "Your Location", "lat": lat, "lon": lon}
 	weather = get_weather(city)
+
 	return jsonify({"weather": weather})
 
 
 # Route for /<city> to show today's forecast for that city
 @app.route("/<city_name>")
 def city_forecast(city_name):
-	# Find city by name (case-insensitive match)
-	city = next((c for c in CITIES if c["name"].lower() == city_name.lower()), None)
-	if not city:
+	# Find city by name (case-insensitive match) in DB
+	conn = get_db()
+	c = conn.cursor()
+	c.execute('SELECT name, lat, lon FROM cities WHERE lower(name) = ?', (city_name.lower(),))
+	row = c.fetchone()
+	conn.close()
+	if not row:
 		return abort(404, description="City not found")
+	city = {"name": row[0], "lat": row[1], "lon": row[2]}
 	weather = get_weather(city)
 	return render_template("city.html", city=city, weather=weather)
 
@@ -81,23 +95,44 @@ def generate_report():
 	city_name = data.get("city")
 	style = data.get("style")
 
-	# Find city info
-	city = next((c for c in CITIES if c["name"] == city_name), None)
-	if not city:
-		return jsonify({"error": "City not found"}), 400
 	time_period = get_time_period()
-	cache_key = (city_name, style, time_period)
+	today = datetime.now().strftime("%Y-%m-%d")
 
-	# Check cache
-	if cache_key in ai_report_cache:
-		weather = get_weather(city)  # Always get fresh weather
-		return jsonify({"report": ai_report_cache[cache_key], "weather": weather, "cached": True})
-	
-	# Not cached, call AI
+	# Get city_id, lat, lon and style_id from DB
+	conn = get_db()
+	c = conn.cursor()
+	c.execute('SELECT id, lat, lon FROM cities WHERE name = ?', (city_name,))
+	city_row = c.fetchone()
+	c.execute('SELECT id FROM styles WHERE name = ?', (style,))
+	style_row = c.fetchone()
+	if not city_row or not style_row:
+		conn.close()
+		return jsonify({"error": "City or style not found in DB"}), 400
+	city_id, lat, lon = city_row[0], city_row[1], city_row[2]
+	style_id = style_row[0]
+
+	# Check for cached report in DB
+	c.execute('''SELECT weather_json, report_text FROM weather_reports
+				WHERE city_id = ? AND style_id = ? AND time_period = ? AND date = ?''',
+			  (city_id, style_id, time_period, today))
+	row = c.fetchone()
+	if row:
+		# Cached report found
+		weather = json.loads(row[0])
+		report = row[1]
+		conn.close()
+		return jsonify({"report": report, "weather": weather, "cached": True})
+
+	# Not cached, call API and store
+	city = {"name": city_name, "lat": lat, "lon": lon}
 	weather = get_weather(city)
 	report = call_llm_api(city_name, weather, style)
-	ai_report_cache[cache_key] = report
-	
+	c.execute('''INSERT INTO weather_reports (city_id, style_id, time_period, date, weather_json, report_text)
+				VALUES (?, ?, ?, ?, ?, ?)''',
+			  (city_id, style_id, time_period, today, json.dumps(weather), report))
+	conn.commit()
+	conn.close()
+
 	return jsonify({"report": report, "weather": weather, "cached": False})
 
 if __name__ == "__main__":
