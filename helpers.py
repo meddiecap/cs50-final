@@ -1,20 +1,43 @@
+from flask import request
 from datetime import datetime
 import requests
+import sqlite3
 import os
 from google import genai
 import json
 from dotenv import load_dotenv
 load_dotenv()
 
+DB_PATH = os.path.join(os.path.dirname(__file__), 'weather.db')
+def get_db():
+	conn = sqlite3.connect(DB_PATH)
+	conn.row_factory = sqlite3.Row
+	return conn
+
 def get_user_ip():
-    import requests
-    try:
-        resp = requests.get("https://api.ipify.org?format=json", timeout=3)
-        if resp.status_code == 200:
-            ip_data = resp.json()
-            return ip_data.get("ip", "0.0.0.0")
-    except requests.RequestException:
-        return "0.0.0.0"
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+    if (ip == '127.0.0.1'):
+        ip = "75.157.111.33"
+    return ip
+
+def get_user_location(ip):
+    if ip:
+        # Fetch location data from ip-api.com
+        try:
+            resp = requests.get(f"http://ip-api.com/json/{ip}", timeout=3)
+            if resp.status_code == 200:
+                return resp.json()
+            
+            if resp.status_code == 429:
+                return {"error": "Rate limit exceeded"}
+            elif resp.status_code == 403:
+                return {"error": "Access denied"}
+            elif resp.status_code == 404:
+                return {"error": "Location not found"}
+        except requests.RequestException:
+            pass
+
+    return {"error": "Could not determine location"}
 
 def get_time_period():
     hour = datetime.now().hour

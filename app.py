@@ -1,12 +1,11 @@
-from flask import abort
+from flask import abort, Flask, render_template, request, jsonify
 from datetime import datetime
-from flask import Flask, render_template, request, jsonify
 import json
 import sqlite3
 import os
 
 # Import get_time_period from helpers.py
-from helpers import get_time_period, get_weather, call_llm_api, get_user_ip
+from helpers import get_time_period, get_weather, call_llm_api, get_user_ip, get_user_location
 
 # In-memory caches
 ip_location_cache = {}  # {ip: {location and weather data}}
@@ -34,28 +33,20 @@ def index():
 	ip = get_user_ip()
 	if ip and "," in ip:
 		ip = ip.split(",")[0].strip()
+		
 	user_location = ip_location_cache.get(ip)
 
 	if not user_location:
-		# Fetch from ip-api.com
-		import requests
-		try:
-			resp = requests.get(f"http://ip-api.com/json/{ip}", timeout=3)
-			if resp.status_code == 200:
-				loc_data = resp.json()
-				if loc_data.get("status") == "success":
-					user_location = loc_data
-					# Get weather for this location
-					city = {"name": loc_data.get("city", "Your Location"), "lat": loc_data["lat"], "lon": loc_data["lon"]}
-					user_weather = get_weather(city)
-					user_location["weather"] = user_weather
-				else:
-					user_location = {"error": "Could not determine location for IP: " + ip}
-			else:
-				user_location = {"error": "Location service error"}
-		except Exception:
-			user_location = {"error": "Location service error"}
-		ip_location_cache[ip] = user_location
+		loc_data = get_user_location(ip)
+
+		if loc_data.get("status") == "success":
+			user_location = loc_data
+			# Get weather for this location
+			city = {"name": loc_data.get("city", "Your Location"), "lat": loc_data["lat"], "lon": loc_data["lon"]}
+			user_weather = get_weather(city)
+			user_location["weather"] = user_weather
+			ip_location_cache[ip] = user_location
+
 	return render_template("index.html", cities=city_names, styles=styles, user_location=user_location)
 
 # Endpoint to get weather for arbitrary lat/lon (for user's location)
