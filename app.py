@@ -1,22 +1,14 @@
 from flask import abort, Flask, render_template, request, jsonify
 from datetime import datetime
 import json
-import sqlite3
-import os
 
 # Import get_time_period from helpers.py
-from helpers import get_time_period, get_weather, call_llm_api, get_user_ip, get_user_location
+from helpers import get_time_period, get_weather, call_llm_api, get_user_ip, get_user_location, get_db
 
 # In-memory caches
 ip_location_cache = {}  # {ip: {location and weather data}}
 
 app = Flask(__name__)
-
-DB_PATH = os.path.join(os.path.dirname(__file__), 'weather.db')
-def get_db():
-	conn = sqlite3.connect(DB_PATH)
-	conn.row_factory = sqlite3.Row
-	return conn
 
 @app.route("/")
 def index():
