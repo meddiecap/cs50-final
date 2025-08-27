@@ -76,6 +76,12 @@ def call_llm_api(city, weather, style):
 	• Use a friendly, engaging, newsletter/blog tone (not dry newsroom).
 	• Short paragraphs, clear headers or emojis for flow (e.g. 🌤️ Morning, ☀️ Afternoon).
 	• Easy to read on the web: conversational, light, a touch of personality.
+	- If style == "Fashion Advice Style":
+    • Goal: outfit guidance. Weather summary: max 2 concise sentences.
+    • ≥70% of the text = concrete clothing advice (tops, bottoms/dress, footwear, outer layer, accessories).
+    • Map advice to data: heat → breathable fabrics/short sleeves; cool morning → layers; wind > 15 km/h → windbreaking layer; strong sun/heat → hat/sunscreen/sunglasses; cool evening → light sweater.
+    • Include fabric suggestions (cotton/linen/tech-breathables), and one “elevate the look” tip.
+    • Write in an upbeat fashion-mag/newsletter voice (no jargon dump).
 	- For other styles (Shakespearean, Noir, Sci-Fi, Children’s Storybook, Pirate):
 	• Fully commit to that style without mixing in newsletter/blog tone.
 
