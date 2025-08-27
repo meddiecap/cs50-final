@@ -9,7 +9,6 @@ import os
 from helpers import get_time_period, get_weather, call_llm_api, get_user_ip
 
 # In-memory caches
-ai_report_cache = {}  # {(city, style, time_period): report}
 ip_location_cache = {}  # {ip: {location and weather data}}
 
 app = Flask(__name__)
@@ -31,11 +30,12 @@ def index():
 	styles = [row[0] for row in c.fetchall()]
 	conn.close()
 
-	# Get user IP (support X-Forwarded-For for proxies)
+	# Get user IP
 	ip = get_user_ip()
 	if ip and "," in ip:
 		ip = ip.split(",")[0].strip()
 	user_location = ip_location_cache.get(ip)
+
 	if not user_location:
 		# Fetch from ip-api.com
 		import requests
