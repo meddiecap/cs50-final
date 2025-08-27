@@ -5,7 +5,7 @@ from flask import Flask, render_template, request, jsonify
 import json
 
 # Import get_time_period from helpers.py
-from helpers import get_time_period, get_weather, call_llm_api
+from helpers import get_time_period, get_weather, call_llm_api, get_user_ip
 
 
 # In-memory caches
@@ -25,7 +25,7 @@ STYLES = config["STYLES"]
 def index():
 	city_names = [city["name"] for city in CITIES]
 	# Get user IP (support X-Forwarded-For for proxies)
-	ip = request.headers.get("X-Forwarded-For", "75.157.111.33") # request.remote_addr 
+	ip = get_user_ip()
 	if ip and "," in ip:
 		ip = ip.split(",")[0].strip()
 	user_location = ip_location_cache.get(ip)

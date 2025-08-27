@@ -6,6 +6,16 @@ import json
 from dotenv import load_dotenv
 load_dotenv()
 
+def get_user_ip():
+    import requests
+    try:
+        resp = requests.get("https://api.ipify.org?format=json", timeout=3)
+        if resp.status_code == 200:
+            ip_data = resp.json()
+            return ip_data.get("ip", "0.0.0.0")
+    except requests.RequestException:
+        return "0.0.0.0"
+
 def get_time_period():
     hour = datetime.now().hour
     if 5 <= hour < 11:
