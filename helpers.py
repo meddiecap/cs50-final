@@ -5,6 +5,7 @@ import sqlite3
 import os
 from google import genai
 import json
+from urllib.parse import quote
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -50,15 +51,19 @@ def get_time_period():
     else:
         return "night"
 
-def get_weather(city):
-	url = (
-		f"https://api.open-meteo.com/v1/forecast?latitude={city['lat']}&longitude={city['lon']}"
-		"&current_weather=true&hourly=temperature_2m,wind_speed_10m,relative_humidity_2m,pressure_msl,cloud_cover&timezone=America%2FLos_Angeles&past_days=1&forecast_days=2"
-	)
-	resp = requests.get(url)
-	if resp.status_code == 200:
-		return resp.json()
-	return {}
+def get_weather(city, timezone_str="America/Los_Angeles"):
+    tz_param = quote(timezone_str)
+    url = (
+        f"https://api.open-meteo.com/v1/forecast?latitude={city['lat']}&longitude={city['lon']}"
+        f"&current=temperature_2m,wind_direction_10m,wind_speed_10m,pressure_msl,cloud_cover,relative_humidity_2m,precipitation"
+        f"&hourly=wind_speed_10m,wind_direction_10m,temperature_2m,pressure_msl,relative_humidity_2m,precipitation,precipitation_probability"
+        f"&timezone={tz_param}&past_days=1&forecast_days=2"
+    )
+    resp = requests.get(url)
+    if resp.status_code == 200:
+        return resp.json()
+    return {}
+	
 
 def call_llm_api(city, weather, style):
 	"""
@@ -140,3 +145,47 @@ def call_llm_api(city, weather, style):
 		return str(response)
 	except Exception as e:
 		return f"[Gemini API exception]: {e}"
+
+
+def beaufort_scale(windspeed):
+    """
+    Convert wind speed in km/h to Beaufort scale.
+    """
+    if windspeed < 1:
+        return 0  # Calm
+    elif windspeed < 6:
+        return 1  # Light air
+    elif windspeed < 12:
+        return 2  # Light breeze
+    elif windspeed < 20:
+        return 3  # Gentle breeze
+    elif windspeed < 29:
+        return 4  # Moderate breeze
+    elif windspeed < 39:
+        return 5  # Fresh breeze
+    elif windspeed < 50:
+        return 6  # Strong breeze
+    elif windspeed < 62:
+        return 7  # High wind
+    elif windspeed < 75:
+        return 8  # Gale
+    elif windspeed < 89:
+        return 9  # Strong gale
+    elif windspeed < 103:
+        return 10  # Storm
+    elif windspeed < 118:
+        return 11  # Violent storm
+    else:
+        return 12  # Hurricane
+    
+def wind_direction_cardinal(degree):
+    """
+    Convert wind direction in degrees to the closest cardinal direction (e.g. N, NNE, NE, etc.).
+    0°/360° is North, 90° is East, 180° is South, 270° is West.
+    """
+    directions = [
+        'N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
+        'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'
+    ]
+    idx = int((degree % 360) / 22.5 + 0.5) % 16
+    return directions[idx]

@@ -1,9 +1,11 @@
 from flask import abort, Flask, render_template, request, jsonify
-from datetime import datetime
+from datetime import datetime, timezone
 import json
+import dateutil.parser
+import zoneinfo
 
 # Import get_time_period from helpers.py
-from helpers import get_time_period, get_weather, call_llm_api, get_user_ip, get_user_location, get_db
+from helpers import *
 
 # In-memory caches
 ip_location_cache = {}  # {ip: {location and weather data}}
@@ -33,13 +35,66 @@ def index():
 
 		if loc_data.get("status") == "success":
 			user_location = loc_data
-			# Get weather for this location
+			# Get weather for this location, using user's timezone if available
 			city = {"name": loc_data.get("city", "Your Location"), "lat": loc_data["lat"], "lon": loc_data["lon"]}
-			user_weather = get_weather(city)
-			user_location["weather"] = user_weather
+			timezone_str = loc_data.get("timezone", "America/Los_Angeles")
+			user_location["weather"] = get_weather(city, timezone_str)
+			user_location["weather"]['current']['cardinal'] = wind_direction_cardinal(user_location["weather"]['current']['wind_direction_10m'])
 			ip_location_cache[ip] = user_location
 
-	return render_template("index.html", cities=city_names, styles=styles, user_location=user_location)
+	# Prepare 24-hour hourly forecast for user's location (if available)
+	user_hourly_forecast = None
+	if user_location and user_location.get("weather") and user_location["weather"].get("hourly"):
+		hourly = user_location["weather"]["hourly"]
+
+		# open-meteo returns arrays: time, temperature_2m, wind_speed_10m, etc.
+		times = hourly.get("time", [])
+		temps = hourly.get("temperature_2m", [])
+		winds = hourly.get("wind_speed_10m", [])
+		wind_directions = hourly.get("wind_direction_10m", [])
+		humidity = hourly.get("relative_humidity_2m", [])
+		pressure = hourly.get("pressure_msl", [])
+		cloud = hourly.get("cloud_cover", [])
+
+		# Use user's timezone for current time		
+		timezone_str = user_location.get("timezone", "America/Los_Angeles")
+		try:
+			tz = zoneinfo.ZoneInfo(timezone_str)
+		except Exception:
+			tz = zoneinfo.ZoneInfo("America/Los_Angeles")
+		now = datetime.now(tz)
+		start_idx = 0
+		for i, t in enumerate(times):
+			tdt = dateutil.parser.isoparse(t)
+			if tdt.tzinfo is None:
+				tdt = tdt.replace(tzinfo=tz)
+			# Find the first hour that is >= current hour (rounded down)
+			if tdt.hour == now.hour and tdt.date() == now.date():
+				start_idx = i
+				break
+			elif tdt > now:
+				start_idx = i
+				break
+		# Always get 24 hours from start_idx
+		end_idx = min(start_idx + 24, len(times))
+		user_hourly_forecast = []
+		for i in range(start_idx, end_idx):
+			# format date time to hour
+			hour = times[i].split("T")[1]
+			user_hourly_forecast.append({
+				"time": hour,
+				"temperature": temps[i] if i < len(temps) else None,
+				"windspeed": winds[i] if i < len(winds) else None,
+				"beaufort": beaufort_scale(winds[i]) if i < len(winds) else None,
+				"winddirection": wind_directions[i] if i < len(wind_directions) else None,
+				"cardinal": wind_direction_cardinal(wind_directions[i]) if i < len(wind_directions) else None,
+				"cloud": cloud[i] if i < len(cloud) else None,
+				"pressure": pressure[i] if i < len(pressure) else None,
+				"humidity": humidity[i] if i < len(humidity) else None
+			})
+
+	return render_template("index.html", cities=city_names, styles=styles, user_location=user_location, user_hourly_forecast=user_hourly_forecast)
+
 
 # Endpoint to get weather for arbitrary lat/lon (for user's location)
 @app.route("/weather_at_location")
