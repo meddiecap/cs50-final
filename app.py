@@ -7,6 +7,8 @@ import zoneinfo
 # Import get_time_period from helpers.py
 from helpers import *
 
+from weather_helper import WEATHER_ICON_MAP, get_weather_icon, get_weather_simplified
+
 # In-memory caches
 ip_location_cache = {}  # {ip: {location and weather data}}
 
@@ -17,18 +19,27 @@ def index():
 	# Load cities and styles from the database
 	conn = get_db()
 	c = conn.cursor()
-	c.execute('SELECT name FROM cities ORDER BY name')
-	city_names = [row[0] for row in c.fetchall()]
+	c.execute('SELECT name, slug, timezone, lat, lon FROM cities ORDER BY name')
+	city_names = [{"name": row[0], "slug": row[1], "timezone": row[2], "lat": row[3], "lon": row[4]} for row in c.fetchall()]
 	c.execute('SELECT name FROM styles ORDER BY name')
 	styles = [row[0] for row in c.fetchall()]
 	conn.close()
+	
+	# add current weather icon
+	cities_current_weather = get_current_weather(city_names)
+	for city in cities_current_weather:
+		city["current"]["icon"] = get_weather_icon(city["current"]["weather_code"], city["current"]["is_day"])
+		city['current']['description'] = get_weather_simplified(city["current"]["weather_code"], city["current"]["is_day"])
+		# Set hour:minute to city timezone from city_names
+		city['current']['time'] = datetime.now(zoneinfo.ZoneInfo(city['timezone'])).strftime("%H:%M")
 
 	# Get user IP
 	ip = get_user_ip()
 	if ip and "," in ip:
 		ip = ip.split(",")[0].strip()
-		
-	user_location = ip_location_cache.get(ip)
+
+	# No caching temporary
+	user_location = None # ip_location_cache.get(ip)
 
 	if not user_location:
 		loc_data = get_user_location(ip)
@@ -52,9 +63,8 @@ def index():
 		temps = hourly.get("temperature_2m", [])
 		winds = hourly.get("wind_speed_10m", [])
 		wind_directions = hourly.get("wind_direction_10m", [])
-		humidity = hourly.get("relative_humidity_2m", [])
-		pressure = hourly.get("pressure_msl", [])
-		cloud = hourly.get("cloud_cover", [])
+		weather_codes = hourly.get("weather_code", [])
+		is_day_flags = hourly.get("is_day", [])  # 1 for day, 0 for night
 
 		# Use user's timezone for current time		
 		timezone_str = user_location.get("timezone", "America/Los_Angeles")
@@ -88,12 +98,11 @@ def index():
 				"beaufort": beaufort_scale(winds[i]) if i < len(winds) else None,
 				"winddirection": wind_directions[i] if i < len(wind_directions) else None,
 				"cardinal": wind_direction_cardinal(wind_directions[i]) if i < len(wind_directions) else None,
-				"cloud": cloud[i] if i < len(cloud) else None,
-				"pressure": pressure[i] if i < len(pressure) else None,
-				"humidity": humidity[i] if i < len(humidity) else None
+				"weather_code": weather_codes[i] if i < len(weather_codes) else None,
+				"icon": get_weather_icon(weather_codes[i], is_day=is_day_flags[i]) if i < len(weather_codes) else None
 			})
 
-	return render_template("index.html", cities=city_names, styles=styles, user_location=user_location, user_hourly_forecast=user_hourly_forecast)
+	return render_template("index.html", cities=cities_current_weather, styles=styles, user_location=user_location, user_hourly_forecast=user_hourly_forecast)
 
 
 # Endpoint to get weather for arbitrary lat/lon (for user's location)

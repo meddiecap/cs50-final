@@ -52,18 +52,53 @@ def get_time_period():
         return "night"
 
 def get_weather(city, timezone_str="America/Los_Angeles"):
+
     tz_param = quote(timezone_str)
     url = (
         f"https://api.open-meteo.com/v1/forecast?latitude={city['lat']}&longitude={city['lon']}"
-        f"&current=temperature_2m,wind_direction_10m,wind_speed_10m,pressure_msl,cloud_cover,relative_humidity_2m,precipitation"
-        f"&hourly=wind_speed_10m,wind_direction_10m,temperature_2m,pressure_msl,relative_humidity_2m,precipitation,precipitation_probability"
+        f"&current=temperature_2m,wind_direction_10m,wind_speed_10m,pressure_msl,relative_humidity_2m,weather_code"
+        f"&hourly=wind_speed_10m,wind_direction_10m,temperature_2m,weather_code,is_day"
         f"&timezone={tz_param}&past_days=1&forecast_days=2"
     )
     resp = requests.get(url)
     if resp.status_code == 200:
         return resp.json()
     return {}
-	
+
+def get_current_weather(city, timezone_str="America/Los_Angeles"):
+    """
+    Fetches the current weather for a specific city.
+    """
+    # if cities is a list, comma-separate lat and lon
+    if isinstance(city, list):
+        lat = ",".join(str(c['lat']) for c in city)
+        lon = ",".join(str(c['lon']) for c in city)
+    else:
+        lat = city['lat']
+        lon = city['lon']
+
+    tz_param = quote(timezone_str)
+    url = (
+        f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
+        f"&current=temperature_2m,wind_direction_10m,wind_speed_10m,pressure_msl,relative_humidity_2m,weather_code,is_day"
+        f"&timezone={tz_param}"
+    )
+    resp = requests.get(url)
+    if resp.status_code == 200:
+        data = resp.json()
+        
+        # attach city information when it's a list or dict
+        if isinstance(city, dict):
+            data['city'] = city
+            data['location_name'] = city['name']
+        elif isinstance(city, list):
+            for i, c in enumerate(city):
+                data[i]['city'] = c
+                data[i]['location_name'] = c['name']
+
+        return data
+
+    return {}
 
 def call_llm_api(city, weather, style):
 	"""

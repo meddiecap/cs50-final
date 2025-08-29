@@ -1,8 +1,13 @@
 import sqlite3
 import os
 import json
+from slugify import slugify
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'weather.db')
+
+# remove database first
+if os.path.exists(DB_PATH):
+    os.remove(DB_PATH)
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -16,6 +21,8 @@ def init_db():
     CREATE TABLE IF NOT EXISTS cities (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT UNIQUE NOT NULL,
+        slug TEXT UNIQUE NOT NULL,
+        timezone TEXT NOT NULL,
         lat REAL NOT NULL,
         lon REAL NOT NULL
     )''')
@@ -49,7 +56,8 @@ def populate_from_config():
     conn = get_db()
     c = conn.cursor()
     for city in cities:
-        c.execute('INSERT OR IGNORE INTO cities (name, lat, lon) VALUES (?, ?, ?)', (city['name'], city['lat'], city['lon']))
+        slug = slugify(city['name'])
+        c.execute('INSERT OR IGNORE INTO cities (name, slug, timezone, lat, lon) VALUES (?, ?, ?, ?, ?)', (city['name'], slug, city['timezone'], city['lat'], city['lon']))
     for style in styles:
         c.execute('INSERT OR IGNORE INTO styles (name) VALUES (?)', (style,))
     conn.commit()

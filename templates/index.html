@@ -3,11 +3,10 @@
 {% block content %}
 <div class="row justify-content-center mb-4">
 	<div class="col-lg-8">
-		<!-- User Location Card (from backend) -->
 		{% if user_location and not user_location.error %}
 		<div class="card shadow-sm mb-4">
 			<div class="card-header bg-success text-white">
-				<h5 class="mb-0">Current weather in {{ user_location.city }}, {{ user_location.country }}</h5>
+				<h5 class="mb-0">Current weather in {{ user_location.city }}, {{ user_location.country }}*</h5>
 			</div>
 			<div class="card-body">
 				{% if user_location.weather and user_location.weather.current %}
@@ -41,9 +40,9 @@
                                 {% endif %}
 
                                 <strong class="text-danger">{{ hour.temperature|round|int }} °C</strong><br>
-                                <i class="wi wi-day-sunny"></i><br>
-                                <i title="{{ hour.cardinal|lower }}" class="wi wi-wind from-{{ hour.winddirection }}-deg"></i><br>
-                                <i title="{{ hour.beaufort }} on Beaufort Scale, {{ hour.windspeed }} km/h" class="wi wi-wind-beaufort-{{ hour.beaufort }}"></i>
+                                <img data-weather-code="{{ hour.weather_code }}" src="/static/icons/static/{{ hour.icon|safe }}">
+                                <i title="{{ hour.cardinal|lower }}" class="fs-2 wi wi-wind from-{{ hour.winddirection }}-deg"></i><br>
+                                <i title="{{ hour.beaufort }} on Beaufort Scale, {{ hour.windspeed }} km/h" class="fs-2 wi wi-wind-beaufort-{{ hour.beaufort }}"></i>
                             </div>
                         {% endfor %}
                     </div>
@@ -54,6 +53,7 @@
                         var swiper = new Swiper(".hourly-forecast-swiper", {
                             slidesPerView: 4,
                             spaceBetween: 10,
+                            grabCursor: true,
                             breakpoints: {
                                 640: {
                                     slidesPerView: 4,
@@ -72,6 +72,8 @@
                     });                    
                 </script>
 				{% endif %}
+                <hr>
+                <small class="text-muted">* Location is based on your IP address and may not be accurate</small>
 			</div>
 		</div>
 		{% elif user_location and user_location.error %}
@@ -80,57 +82,42 @@
 		<!-- Main Weather Card -->
 		<div class="card shadow-sm mb-4">
 			<div class="card-header bg-primary text-white">
-				<h1 class="mb-0">Weather for 10 Major Cities</h1>
+                <h5 class="mb-0">The weather in other places</h5>
 			</div>
 			<div class="card-body">
-				<form id="reportForm" class="row g-3 align-items-end" onsubmit="return false;">
-					<div class="col-md-5">
-						<label for="city" class="form-label">City</label>
-						<select id="city" class="form-select">
-							{% for c in cities %}
-							<option value="{{c}}">{{c}}</option>
-							{% endfor %}
-						</select>
-					</div>
-					<div class="col-md-5">
-						<label for="style" class="form-label">Style</label>
-						<select id="style" class="form-select">
-							{% for s in styles %}
-							<option value="{{s}}">{{s}}</option>
-							{% endfor %}
-						</select>
-					</div>
-					<div class="col-md-2 d-grid">
-						<button class="btn btn-primary" onclick="generateReport()">Generate Weather Report</button>
-					</div>
-				</form>
-				<div class="alert alert-info mt-4" id="reportBox">Select a city and style, then click Generate Weather Report.</div>
-				<table class="table table-striped table-hover mt-3" id="weatherTable" style="display:none;">
-					<thead>
-						<tr>
-							<th>Temperature (°C)</th>
-							<th>Windspeed (km/h)</th>
-							<th>Weather Code</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr>
-							<td id="tempCell"></td>
-							<td id="windCell"></td>
-							<td id="codeCell"></td>
-						</tr>
-					</tbody>
-				</table>
-				<div class="mt-4">
-					<h5>City Pages</h5>
-					<ul class="list-inline">
-						{% for c in cities %}
-						<li class="list-inline-item mb-2">
-							<a class="btn btn-outline-secondary btn-sm" href="/{{c}}">View {{c}} Forecast</a>
-						</li>
-						{% endfor %}
-					</ul>
-				</div>
+				<div class="row">
+                    {% for c in cities %}
+                        <div class="col-3 mb-4">
+                            <a href="/{{ c.city.slug }}" class="card city-card border-0" 
+                                {% if (c.current.description == "sunny") %}
+                                    style="background-color: #fff4d4;"
+                                {% elif (c.current.description == "cloudy") %}
+                                    style="background-color: #f1f1f1;"
+                                {% elif (c.current.description == "clear") %}
+                                    style="background-color: #ffffff; box-shadow: 0 0 10px rgba(0,0,0,0.1);"
+                                {% elif (c.current.description == "rainy") %}
+                                    style="background-color: #e6eaff;"
+                                {% endif %}
+                                >
+                                <div class="card-body pb-0">
+                                    <img class="weather-icon" width="50%" height="auto" data-weather-code="{{ c.current.weathercode }}" src="/static/icons/static/{{ c.current.icon }}">
+                                    <div class="d-flex justify-content-between">
+                                    <p class="mb-0 h5 fw-bold">{{ c.current.temperature_2m }}°</p>
+                                    <p class="mb-0 hour">
+                                        <i class="wi wi-time-4"></i>
+                                        <span>{{ c.current.time }}</span>
+                                    </p>
+                                    </div>
+                                </div>
+                                <hr>
+                                <div class="card-body pt-0">
+                                    <h6 class="fw-bold mb-1">{{ c.location_name }}</h6>
+                                    <p class="mb-0">{{ c.current.description|title }}</p>
+                                </div>
+                            </a>
+                        </div>
+                    {% endfor %}
+                </div>
 			</div>
 		</div>
 	</div>
@@ -156,5 +143,20 @@
 			}
 		});
 	}
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // on hover .city-card change img.weather-icon src from /static/icons/static/ to /static/icons/animated/
+        const cityCards = document.querySelectorAll('.city-card');
+        cityCards.forEach(card => {
+            card.addEventListener('mouseenter', function() {
+                const icon = card.querySelector('.weather-icon');
+                icon.src = icon.src.replace('/static/icons/static/', '/static/icons/animated/');
+            });
+            card.addEventListener('mouseleave', function() {
+                const icon = card.querySelector('.weather-icon');
+                icon.src = icon.src.replace('/static/icons/animated/', '/static/icons/static/');
+            });
+        });
+    });
 </script>
 {% endblock %}
