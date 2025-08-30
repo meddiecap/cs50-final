@@ -1,4 +1,4 @@
-from flask import abort, Flask, render_template, request, redirect, url_for, session, flash
+from flask import abort, Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from flask_session import Session
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timezone
@@ -224,7 +224,7 @@ def city_forecast(city_name):
 	c.execute('SELECT id, name, position FROM styles ORDER BY position ASC')
 	styles = [dict(id=row[0], name=row[1], position=row[2]) for row in c.fetchall()]
 
-	# Get default report for the first style (assume "Normal Weather Report" or first in list)
+	# Get default report for the first style (assume "Normal Weather Report" is first in list)
 	default_style = styles[0]
 	style_id = default_style['id']
 	style_name = default_style['name']
@@ -248,11 +248,76 @@ def city_forecast(city_name):
 				(city["id"], style_id, time_period, today, json.dumps(weather), report))
 		conn.commit()
 
-	conn.close()	
-
 	logged_in = session.get('user_id') is not None
-	return render_template("city.html", city=city, report=report, weather=weather, user_hourly_forecast=user_hourly_forecast, styles=styles, logged_in=logged_in)
 
+	# if a user is logged in, reports for all styles and current day and time of day for the city should be fetched
+	if logged_in:
+		c.execute('''SELECT style_id, report_text FROM weather_reports
+					WHERE user_id = ? AND city_id = ? AND date = ? AND time_period = ?''',
+				  (session.get('user_id'), city["id"], today, time_period))
+		rows = c.fetchall()
+		user_reports = {row[0]: row[1] for row in rows}
+	else:
+		user_reports = {}
+
+	conn.close()
+
+	return render_template("city.html", city=city, report=report, weather=weather, user_hourly_forecast=user_hourly_forecast, styles=styles, logged_in=logged_in, user_reports=user_reports)
+
+@app.route('/generate_report', methods=['POST'])
+def generate_report():
+	data = request.get_json()
+	city_id = data.get('city_id')
+	style_id = data.get('style_id')
+
+	# get city from database
+	conn = get_db()
+	c = conn.cursor()
+	c.execute('SELECT id, name, lat, lon, timezone FROM cities WHERE id = ?', (city_id,))
+	row = c.fetchone()
+	city = {"id": row[0], "name": row[1], "lat": row[2], "lon": row[3], "timezone": row[4]}
+	conn.close()
+
+	# Get style from database
+	conn = get_db()
+	c = conn.cursor()
+	c.execute('SELECT name FROM styles WHERE id = ?', (style_id,))
+	row = c.fetchone()
+	style = {"id": style_id, "name": row[0]} if row else None
+	conn.close()
+	
+	# Use city's timezone for current time and find the starting index
+	# of the current hour
+	timezone_str = city["timezone"]
+	tz = zoneinfo.ZoneInfo(timezone_str)
+	now = datetime.now(tz)
+
+	# fetch new weather data
+	weather = get_weather(city, city['timezone'])
+
+	time_period = get_time_period_from_json(weather)
+	today = now.strftime("%Y-%m-%d")
+
+	# get the weather
+	conn = get_db()
+	c = conn.cursor()
+	c.execute('SELECT report_text FROM weather_reports WHERE user_id = ? AND city_id = ? AND style_id = ? AND time_period = ? AND date = ?', (session.get('user_id'), city["id"], style["id"], time_period, today))
+	row = c.fetchone()
+	report = row[0] if row else None
+	conn.close()
+
+	if report is None:
+		# generate report
+		report = call_llm_api(city["name"], weather, style["name"])
+		# store it in the database
+		conn = get_db()
+		c = conn.cursor()
+		c.execute('INSERT INTO weather_reports (user_id, city_id, style_id, time_period, date, weather_json, report_text) VALUES (?, ?, ?, ?, ?, ?, ?)',
+				  (session.get('user_id'), city["id"], style["id"], time_period, today, json.dumps(weather), report))
+		conn.commit()
+		conn.close()
+
+	return jsonify({"success": True, "report": report})
 
 if __name__ == "__main__":
 	app.run(debug=True)

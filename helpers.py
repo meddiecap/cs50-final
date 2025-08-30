@@ -141,7 +141,7 @@ STYLE_INSTRUCTIONS = {
     "Shakespearean": "Fully commit to Shakespearean style without mixing in newsletter/blog tone.",
     "Noir": "Fully commit to Noir style without mixing in newsletter/blog tone.",
     "Sci-Fi": "Fully commit to Sci-Fi style without mixing in newsletter/blog tone.",
-    "Children's Storybook": "Fully commit to Children's Storybook style without mixing in newsletter/blog tone.",
+    "Children's Storybook": "Fully commit to Children's Storybook style without mixing in newsletter/blog tone. Reading level: 5th grade.",
     "Pirate": "Fully commit to Pirate style without mixing in newsletter/blog tone.",
 }
 

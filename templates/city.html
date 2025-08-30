@@ -85,6 +85,11 @@
                         </button>
                     </li>
                     {% endfor %}
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-bold" id="tab-help" data-bs-toggle="tab" data-bs-target="#content-help" type="button" role="tab">
+                            ?
+                        </button>
+                    </li>
                 </ul>
                 <div class="tab-content mt-3 p-3">
                     {% for style in styles %}
@@ -92,11 +97,41 @@
                         {% if loop.first %}
                             <div class="city-weather-report">{{ report | safe }}</div>
                         {% else %}
-                            <button class="btn btn-primary" onclick="generateReport('{{ style.name }}', '{{ city.id }}', '{{ style.id }}')">Generate report</button>
-                            <div id="report-{{ style.id }}"></div>
+                            <button class="btn btn-primary mb-4" onclick="generateReport('{{ city.id }}', '{{ style.id }}')">Generate report</button>
+                            <div id="report-{{ style.id }}" class="city-weather-report">
+
+                                {% if user_reports[style.id] %}
+                                    {{ user_reports[style.id] | safe }}
+                                {% else %}
+                                    <p class="alert alert-info">
+                                        No report generated yet.
+                                    </p>
+                                {% endif %}
+                            </div>
                         {% endif %}
                     </div>
                     {% endfor %}
+                    <div class="tab-pane fade" id="content-help" role="tabpanel">
+                        <h5>Help</h5>
+                        <p>The normal weather reports are auto-generated.</p>
+                        <p>
+                            There are four times of the day: morning, afternoon, evening, and night.
+                            Each report is generated based on the current weather conditions and forecast.
+                            Depending on the time of day, the report may emphasize different weather aspects.
+                        </p>
+                        <p>
+                            The various styles will generate different report formats and adhere to specific guidelines of each style.
+                        </p>
+                        <p>
+                            If you don't like a particular report style, you can switch to a different one using the tabs above.
+                            You can regenerate the report by clicking the "Generate report" button.
+                            Please be patient as it may take a few seconds to generate.
+                        </p>
+                        <p>
+                            A report generated in the morning will no longer be available in the afternoon.
+                            Similarly, reports generated in the afternoon will not be available in the evening, and so on.
+                        </p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -109,4 +144,32 @@
         {% endif %}
     </div>
 </div>
+
+<script>
+    function generateReport(cityId, styleId) {
+        // Make an AJAX request to generate the report
+        fetch(`/generate_report`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                city_id: cityId,
+                style_id: styleId
+            })
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Display the generated report
+                    document.getElementById(`report-${styleId}`).innerHTML = data.report;
+                } else {
+                    console.error('Error generating report:', data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error generating report:', error);
+            });
+    }
+</script>
 {% endblock %}
