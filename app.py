@@ -218,37 +218,34 @@ def city_forecast(city_name):
 				"icon": get_weather_icon(weather_codes[i], is_day=is_day_flags[i]) if i < len(weather_codes) else None
 			})
 			
-	# Get city_id, lat, lon and style_id from DB
+	# Get all styles ordered by position
 	conn = get_db()
 	c = conn.cursor()
-	c.execute('SELECT id, name FROM styles WHERE name = ?', ("Normal Weather Report Style",))
-	style_row = c.fetchone()
-	style_id = style_row[0]
-	style_name = style_row[1]
+	c.execute('SELECT id, name, position FROM styles ORDER BY position ASC')
+	styles = [dict(id=row[0], name=row[1], position=row[2]) for row in c.fetchall()]
 
+	# Get default report for the first style (assume "Normal Weather Report" or first in list)
+	default_style = styles[0]
+	style_id = default_style['id']
+	style_name = default_style['name']
 	time_period = get_time_period_from_json(weather)
 	today = now.strftime("%Y-%m-%d")
-
-	# Check for cached report in DB
 	c.execute('''SELECT weather_json, report_text FROM weather_reports
 				WHERE city_id = ? AND style_id = ? AND time_period = ? AND date = ?''',
 			  (city["id"], style_id, time_period, today))
 	row = c.fetchone()
-
 	if row:
-		# Cached report found
 		report = row[1]
 	else:
-		# Not cached, call API and store
 		report = call_llm_api(city["name"], weather, style_name)
 		c.execute('''INSERT INTO weather_reports (city_id, style_id, time_period, date, weather_json, report_text)
 					VALUES (?, ?, ?, ?, ?, ?)''',
 				(city["id"], style_id, time_period, today, json.dumps(weather), report))
 		conn.commit()
+	conn.close()
 
-	conn.close()	
-
-	return render_template("city.html", city=city, report=report, weather=weather, user_hourly_forecast=user_hourly_forecast)
+	logged_in = session.get('user_id') is not None
+	return render_template("city.html", city=city, report=report, weather=weather, user_hourly_forecast=user_hourly_forecast, styles=styles, logged_in=logged_in)
 
 
 if __name__ == "__main__":
