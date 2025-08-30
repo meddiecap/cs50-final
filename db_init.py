@@ -35,6 +35,7 @@ def init_db():
     c.execute('''
     CREATE TABLE IF NOT EXISTS weather_reports (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
         city_id INTEGER NOT NULL,
         style_id INTEGER NOT NULL,
         time_period TEXT NOT NULL,
@@ -42,6 +43,7 @@ def init_db():
         weather_json TEXT NOT NULL,
         report_text TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id),
         FOREIGN KEY(city_id) REFERENCES cities(id),
         FOREIGN KEY(style_id) REFERENCES styles(id),
         UNIQUE(city_id, style_id, time_period, date)

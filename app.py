@@ -230,19 +230,25 @@ def city_forecast(city_name):
 	style_name = default_style['name']
 	time_period = get_time_period_from_json(weather)
 	today = now.strftime("%Y-%m-%d")
+
+	# Check for cached report in DB
 	c.execute('''SELECT weather_json, report_text FROM weather_reports
-				WHERE city_id = ? AND style_id = ? AND time_period = ? AND date = ?''',
+				WHERE user_id IS NULL AND city_id = ? AND style_id = ? AND time_period = ? AND date = ?''',
 			  (city["id"], style_id, time_period, today))
 	row = c.fetchone()
+
 	if row:
+		# Cached report found
 		report = row[1]
 	else:
+		# Not cached, call API and store
 		report = call_llm_api(city["name"], weather, style_name)
 		c.execute('''INSERT INTO weather_reports (city_id, style_id, time_period, date, weather_json, report_text)
 					VALUES (?, ?, ?, ?, ?, ?)''',
 				(city["id"], style_id, time_period, today, json.dumps(weather), report))
 		conn.commit()
-	conn.close()
+
+	conn.close()	
 
 	logged_in = session.get('user_id') is not None
 	return render_template("city.html", city=city, report=report, weather=weather, user_hourly_forecast=user_hourly_forecast, styles=styles, logged_in=logged_in)
