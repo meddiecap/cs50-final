@@ -16,6 +16,7 @@ __pycache__/
 # Flask stuff:
 instance/
 .webassets-cache
+flask_session/
 
 weather.db
 .cache.sqlite
