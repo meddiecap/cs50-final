@@ -1,8 +1,17 @@
-from flask import abort, Flask, render_template, request, jsonify
+from flask import abort, Flask, render_template, request, redirect, url_for, session, flash
+from flask_session import Session
+from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timezone
 import json
 import dateutil.parser
 import zoneinfo
+
+app = Flask(__name__)
+
+# Configure session to use filesystem (instead of signed cookies)
+app.config["SESSION_PERMANENT"] = False
+app.config["SESSION_TYPE"] = "filesystem"
+Session(app)
 
 # Import get_time_period from helpers.py
 from helpers import *
@@ -11,8 +20,6 @@ from weather_helper import WEATHER_ICON_MAP, get_weather_icon, get_weather_simpl
 
 # In-memory caches
 ip_location_cache = {}  # {ip: {location and weather data}}
-
-app = Flask(__name__)
 
 @app.route("/")
 def index():
@@ -103,6 +110,48 @@ def index():
 			})
 
 	return render_template("index.html", cities=cities_current_weather, styles=styles, user_location=user_location, user_hourly_forecast=user_hourly_forecast)
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        # Validate, check for existing user, etc.
+        password_hash = generate_password_hash(password)
+        # Insert into DB...
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('INSERT INTO users (username, password_hash) VALUES (?, ?)', (username, password_hash))
+        conn.commit()
+        conn.close()
+        flash('Registration successful! Please log in.', 'success')
+        return redirect(url_for('login'))
+    return render_template('register.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+	if request.method == 'POST':
+		username = request.form['username']
+		password = request.form['password']
+
+		# Fetch user from DB...
+		conn = get_db()
+		c = conn.cursor()
+		c.execute('SELECT * FROM users WHERE username = ?', (username,))
+		user = c.fetchone()
+		conn.close()
+
+		if user and check_password_hash(user['password_hash'], password):
+			session['user_id'] = user['id']
+			return redirect(url_for('index'))
+		
+		flash('Invalid credentials', 'danger')
+	return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('index'))
 
 # Route for /<city> to show today's forecast for that city
 @app.route("/<city_name>")

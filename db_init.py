@@ -45,6 +45,13 @@ def init_db():
         FOREIGN KEY(style_id) REFERENCES styles(id),
         UNIQUE(city_id, style_id, time_period, date)
     )''')
+    c.execute('''
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )''')
     conn.commit()
     conn.close()
 

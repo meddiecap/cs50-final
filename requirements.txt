@@ -1,4 +1,5 @@
-flask
+Flask
+Flask-Session
 requests
 python-dotenv
 google-genai
