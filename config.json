@@ -12,12 +12,12 @@
     {"name": "Mumbai", "timezone": "Asia/Kolkata", "lat": 19.0760, "lon": 72.8777}
   ],
   "STYLES": [
-    "Shakespearean Style",
-    "Noir Detective Style",
-    "Sci-Fi Futuristic Style",
-    "Children’s Storybook Style",
-    "Pirate Style",
-    "Normal Weather Report Style",
-    "Fashion Advice Style"
+    "Normal Weather Report",
+    "Shakespearean",
+    "Noir Detective",
+    "Sci-Fi Futuristic",
+    "Children's Storybook",
+    "Pirate",
+    "Fashion Advice"
   ]
 }

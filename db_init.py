@@ -29,7 +29,8 @@ def init_db():
     c.execute('''
     CREATE TABLE IF NOT EXISTS styles (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT UNIQUE NOT NULL
+        name TEXT UNIQUE NOT NULL,
+        position INTEGER NOT NULL
     )''')
     c.execute('''
     CREATE TABLE IF NOT EXISTS weather_reports (
@@ -65,8 +66,8 @@ def populate_from_config():
     for city in cities:
         slug = slugify(city['name'])
         c.execute('INSERT OR IGNORE INTO cities (name, slug, timezone, lat, lon) VALUES (?, ?, ?, ?, ?)', (city['name'], slug, city['timezone'], city['lat'], city['lon']))
-    for style in styles:
-        c.execute('INSERT OR IGNORE INTO styles (name) VALUES (?)', (style,))
+    for i, style in enumerate(styles):
+        c.execute('INSERT OR IGNORE INTO styles (name, position) VALUES (?, ?)', (style, i))
     conn.commit()
     conn.close()
 
