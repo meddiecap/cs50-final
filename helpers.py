@@ -8,6 +8,8 @@ import json
 from urllib.parse import quote
 from dotenv import load_dotenv
 load_dotenv()
+from datetime import datetime
+import zoneinfo
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'weather.db')
 def get_db():
@@ -44,25 +46,48 @@ def get_time_period():
     hour = datetime.now().hour
     if 5 <= hour < 11:
         return "morning"
-    elif 11 <= hour < 16:
+    elif 11 <= hour < 18:
         return "midday"
-    elif 16 <= hour < 21:
+    elif 18 <= hour < 21:
+        return "evening"
+    else:
+        return "night"
+    
+def get_time_period_from_json(weather_json):
+    current_time = datetime.fromisoformat(weather_json["current"]["time"])
+    hour = current_time.hour
+    if 5 <= hour < 11:
+        return "morning"
+    elif 11 <= hour < 18:
+        return "midday"
+    elif 18 <= hour < 21:
         return "evening"
     else:
         return "night"
 
-def get_weather(city, timezone_str="America/Los_Angeles"):
+def opening_token(city, time_period, tomorrow_date):
+    if time_period in ("evening", "night"):
+        return f"Tomorrow, {tomorrow_date},"
+    if time_period == "midday":
+        return "This afternoon,"
+    # morning:
+    return f"Good morning, {city}!"
 
+def get_weather(city, timezone_str="America/Los_Angeles"):
     tz_param = quote(timezone_str)
     url = (
         f"https://api.open-meteo.com/v1/forecast?latitude={city['lat']}&longitude={city['lon']}"
         f"&current=temperature_2m,wind_direction_10m,wind_speed_10m,pressure_msl,relative_humidity_2m,weather_code"
         f"&hourly=wind_speed_10m,wind_direction_10m,temperature_2m,weather_code,is_day"
-        f"&timezone={tz_param}&past_days=1&forecast_days=2"
+        f"&timezone={tz_param}&forecast_days=2"
     )
     resp = requests.get(url)
     if resp.status_code == 200:
-        return resp.json()
+
+        # add url to output
+        resp_json = resp.json()
+        resp_json["url"] = url
+        return resp_json
     return {}
 
 def get_current_weather(city, timezone_str="America/Los_Angeles"):
@@ -99,87 +124,119 @@ def get_current_weather(city, timezone_str="America/Los_Angeles"):
         return data
 
     return {}
+    
+STYLE_INSTRUCTIONS = {
+    "Normal Weather Report Style": """
+    Use a friendly, engaging, newsletter/blog tone (not dry newsroom).
+    Short paragraphs (use p-tags), clear headers or emojis for flow (e.g. 🌤️ Morning, ☀️ Afternoon).
+    Easy to read on the web: conversational, light, a touch of personality.
+    """,
+    "Fashion Advice Style": """
+    Goal: outfit guidance. Weather summary: max 2 concise sentences.
+    ≥70% of the text = concrete clothing advice (tops, bottoms/dress, footwear, outer layer, accessories).
+    Map advice to data: heat → breathable fabrics/short sleeves; cool morning → layers; wind > 15 km/h → windbreaking layer; strong sun/heat → hat/sunscreen/sunglasses; cool evening → light sweater.
+    Include fabric suggestions (cotton/linen/tech-breathables), and one “elevate the look” tip.
+    Write in an upbeat fashion-mag/newsletter voice (no jargon dump).
+    """,
+    "Shakespearean": "Fully commit to Shakespearean style without mixing in newsletter/blog tone.",
+    "Noir": "Fully commit to Noir style without mixing in newsletter/blog tone.",
+    "Sci-Fi": "Fully commit to Sci-Fi style without mixing in newsletter/blog tone.",
+    "Children's Storybook": "Fully commit to Children's Storybook style without mixing in newsletter/blog tone.",
+    "Pirate": "Fully commit to Pirate style without mixing in newsletter/blog tone.",
+}
 
 def call_llm_api(city, weather, style):
-	"""
-	Calls Google Gemini API (using google-genai client) to generate a weather report in the selected style.
-	"""
-	GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-	if not GEMINI_API_KEY:
-		return "[Error: GEMINI_API_KEY not set in environment.]"
+    """
+    Calls Google Gemini API (using google-genai client) to generate a weather report in the selected style.
+    """
+
+    GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+    if not GEMINI_API_KEY:
+        return "[Error: GEMINI_API_KEY not set in environment.]"
 	
-	GEMINI_API_MODEL = os.environ.get("GEMINI_API_MODEL", "gemini-2.5-flash-lite")
-	
-	from datetime import datetime, timedelta
-	import zoneinfo
+    GEMINI_API_MODEL = os.environ.get("GEMINI_API_MODEL", "gemini-2.5-flash-lite")
 
-	tz = zoneinfo.ZoneInfo("America/Los_Angeles")  # of je gewenste tz
-	now = datetime.now(tz)
-	local_date = now.strftime("%Y-%m-%d")
-	tomorrow_date = (now + timedelta(days=1)).strftime("%Y-%m-%d")
-	
-	weather_json = json.dumps(weather, indent=2)
+    from datetime import datetime, timedelta
+    import zoneinfo
 
-	prompt = f"""
-	ROLE: You are a creative weather editor for a website.
-	Write a weather report for {city} in {style}. Use at least 200 words. 250 words max.
+    weather_json = json.dumps(weather, indent=2)
 
-	Context:
-	- timezone: {tz}
-	- local_date: {local_date}
-	- tomorrow_date: {tomorrow_date}
-	- current_time_of_day: {get_time_period()}
+    # always use the locations local time, not the user's local time.
+    tz = zoneinfo.ZoneInfo(weather["timezone"])
+    now = datetime.now(tz)
+    local_date = now.strftime("%Y-%m-%d")
+    tomorrow_date = (now + timedelta(days=1)).strftime("%Y-%m-%d")
 
-	Hard rules (must follow):
-	- If current_time_of_day in ["evening","night"]: 
-	1) Start with tomorrow_date. 
-	2) Cover tomorrow 06:00–22:00 (temp ranges, wind, any rain if present).
-	3) Tonight: ≤1 sentence.
-	- If current_time_of_day == "morning": focus on the rest of today 08:00–22:00.
-	- If current_time_of_day == "midday": ≤1 sentence about the morning, then the rest of today until 22:00.
-	- Do not open with current conditions unless it's morning.
-	- Do not invent data not present in JSON.
+    # only include relevant style instructions
+    prompt_style_instructions = STYLE_INSTRUCTIONS.get(style, "")
 
-	Weather JSON:
-	{weather_json}
+    prompt = f"""
+    ROLE: You are a creative weather editor for a website.
+    Write a weather report for {city} in {style}. Use at least 200 words. 250 words max.
 
-	STYLE:
-	- Always write in the requested style: {style}.
-	- If style == "Normal Weather Report Style":
-	• Use a friendly, engaging, newsletter/blog tone (not dry newsroom).
-	• Short paragraphs, clear headers or emojis for flow (e.g. 🌤️ Morning, ☀️ Afternoon).
-	• Easy to read on the web: conversational, light, a touch of personality.
-	- If style == "Fashion Advice Style":
-    • Goal: outfit guidance. Weather summary: max 2 concise sentences.
-    • ≥70% of the text = concrete clothing advice (tops, bottoms/dress, footwear, outer layer, accessories).
-    • Map advice to data: heat → breathable fabrics/short sleeves; cool morning → layers; wind > 15 km/h → windbreaking layer; strong sun/heat → hat/sunscreen/sunglasses; cool evening → light sweater.
-    • Include fabric suggestions (cotton/linen/tech-breathables), and one “elevate the look” tip.
-    • Write in an upbeat fashion-mag/newsletter voice (no jargon dump).
-	- For other styles (Shakespearean, Noir, Sci-Fi, Children’s Storybook, Pirate):
-	• Fully commit to that style without mixing in newsletter/blog tone.
+    Context:
+    - timezone: {tz}
+    - local_date: {local_date}
+    - tomorrow_date: {tomorrow_date}
+    - current_time_of_day: {get_time_period_from_json(weather)}
 
-	OUTPUT:
-	- Deliver a lively weather piece, formatted with line breaks for readability.
-	- Keep the focus day clear (“Tomorrow …” if evening/night).
-	"""
-	
-	try:
-		client = genai.Client(api_key=GEMINI_API_KEY)
-		response = client.models.generate_content(
-			model=GEMINI_API_MODEL,
-			contents=prompt
-		)
-		# The response object may have .text or .candidates[0].content.parts[0].text
-		if hasattr(response, 'text'):
-			return response.text
-		# Fallback for other response structures
-		if hasattr(response, 'candidates') and response.candidates:
-			parts = response.candidates[0].content.parts
-			if parts and hasattr(parts[0], 'text'):
-				return parts[0].text
-		return str(response)
-	except Exception as e:
-		return f"[Gemini API exception]: {e}"
+    Hard rules (must follow):
+    - If current_time_of_day in ["evening","night"]: 
+    1) Start with tomorrow_date. 
+    2) Cover tomorrow 06:00–22:00 (temp ranges, wind, any rain if present).
+    3) Tonight: ≤1 sentence.
+    - If current_time_of_day == "morning": focus on the rest of today 08:00–22:00.
+    - If current_time_of_day == "midday": ≤1 sentence about the morning, then the rest of today until 22:00.
+    - Do not open with current conditions unless it's morning.
+    - Do not invent data not present in JSON.
+
+    Weather JSON:
+    {weather_json}
+
+    STYLE:
+    - Always write in the requested style: {style}.
+    {prompt_style_instructions}
+
+    FORMATTING:
+    - Always start with an <h1> headline for the city and date.
+    - If the time period is "morning":
+        - Add a TLDR summary as an unordered <ul> list with three <li> items: morning, afternoon, evening (each with a short summary).
+    - If the time period is not "morning":
+        - Add a <h2>Summary</h2> section with a <p> summarizing the day up to now.
+    - For each relevant period (morning, afternoon, evening):
+        - Use a <h2> header for the period name (e.g., <h2>Afternoon</h2>).
+        - Follow with a <p> paragraph describing the weather for that period.
+    - Only use the following HTML tags: <h1>, <h2>, <ul>, <ol>, <li>, <p>, <strong>, <em>, <br>, <span>.
+    - Do NOT use <script>, <style>, <iframe>, <link>, <img>, <video>, <audio>, or any other HTML/JS/CSS.
+    - Keep the HTML minimal, clean, and semantic.
+    - If uncertain, prefer plain text over unsupported HTML.
+
+    OUTPUT:
+    - Always follow this structure:
+        1. <h1> headline
+        2. TLDR <ul> (if morning) OR <h2>Summary</h2> + <p> (if not morning)
+        3. For each period (morning, afternoon, evening): <h2> + <p>
+    - Do not include any content outside this structure.
+    - Ensure the output is lively, readable, and consistent every time.
+    """
+
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        response = client.models.generate_content(
+            model=GEMINI_API_MODEL,
+            contents=prompt
+        )
+        # The response object may have .text or .candidates[0].content.parts[0].text
+        if hasattr(response, 'text'):
+            return response.text
+        # Fallback for other response structures
+        if hasattr(response, 'candidates') and response.candidates:
+            parts = response.candidates[0].content.parts
+            if parts and hasattr(parts[0], 'text'):
+                return parts[0].text
+        return str(response)
+    except Exception as e:
+        return f"[Gemini API exception]: {e}"
 
 
 def beaufort_scale(windspeed):

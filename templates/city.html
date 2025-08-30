@@ -3,22 +3,80 @@
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-8">
-        <div class="card shadow mb-4">
-            <div class="card-header bg-primary text-white">
-                <h1 class="mb-0">The weather in {{ city.name }}</h1>
-            </div>
-            <div class="card-body">
-                {% if weather.current_weather %}
-                    <h5 class="card-title">Current Weather</h5>
-                    <ul class="list-group list-group-flush mb-3">
-                        <li class="list-group-item">Temperature: <strong>{{ weather.current_weather.temperature }} °C</strong></li>
-                        <li class="list-group-item">Windspeed: <strong>{{ weather.current_weather.windspeed }} km/h</strong></li>
-                        <li class="list-group-item">Weather Code: <strong>{{ weather.current_weather.weathercode }}</strong></li>
-                    </ul>
-                {% else %}
-                    <div class="alert alert-warning">Weather data is not available for this city.</div>
-                {% endif %}
-                <a href="/" class="btn btn-outline-primary mt-2">&#8592; Back to main page</a>
+		<div class="card shadow-sm mb-4">
+			<div class="card-header bg-success text-white">
+				<div class="h5 mb-0">Current weather in {{ city.name }}</div>
+			</div>
+			<div class="card-body">
+				{% if weather and weather.current %}
+                <div class="row mb-4">
+                    <div class="col-5 justify-content-between">
+                        <h1 class="display-1">{{ weather.current.temperature_2m }} °C</h1>
+                    </div>
+                    <div class="col-7">                    
+                        <ul class="list-group list-group-flush mb-2">
+                            <li class="list-group-item">Wind: <strong> {{ weather.current.cardinal }} {{ weather.current.wind_speed_10m }} km/h</strong></li>
+                            <li class="list-group-item">Pressure: <strong>{{ weather.current.pressure_msl }} hPa</strong></li>
+                            <li class="list-group-item">Humidity: <strong>{{ weather.current.relative_humidity_2m }}%</strong></li>
+                        </ul>
+                    </div>
+                </div>
+				{% else %}
+				<div class="alert alert-warning mb-0">Weather data is not available for your location.</div>
+				{% endif %}
+
+
+                {% if user_hourly_forecast %}
+                <div class="swiper hourly-forecast-swiper mb-4">
+                    <div class="swiper-wrapper">
+                        {% for hour in user_hourly_forecast %}
+                            <div data-original-time="{{ hour.original_time }}" class="swiper-slide">
+                                {% if loop.index0 == 0 %}
+                                    now<br>
+                                {% else %}
+                                    {{ hour.time }}<br>
+                                {% endif %}
+
+                                <strong class="text-danger">{{ hour.temperature|round|int }} °C</strong><br>
+                                <img data-weather-code="{{ hour.weather_code }}" src="/static/icons/static/{{ hour.icon|safe }}">
+                                <i title="{{ hour.cardinal|lower }}" class="fs-2 wi wi-wind from-{{ hour.winddirection }}-deg"></i><br>
+                                <i title="{{ hour.beaufort }} on Beaufort Scale, {{ hour.windspeed }} km/h" class="fs-2 wi wi-wind-beaufort-{{ hour.beaufort }}"></i>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <script>
+                    document.addEventListener('DOMContentLoaded', function() {
+                        var swiper = new Swiper(".hourly-forecast-swiper", {
+                            slidesPerView: 4,
+                            spaceBetween: 0,
+                            grabCursor: true,
+                            breakpoints: {
+                                640: {
+                                    slidesPerView: 4,
+                                    spaceBetween: 0,
+                                },
+                                768: {
+                                    slidesPerView: 6,
+                                    spaceBetween: 0,
+                                },
+                                1024: {
+                                    slidesPerView: 8,
+                                    spaceBetween: 0,
+                                },
+                            },
+                        });
+                    });                    
+                </script>
+				{% endif %}
+                <small class="text-muted">* Location is based on your IP address and may not be accurate</small>
+			</div>
+		</div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-body city-weather-report">
+                {{ report | safe }}
             </div>
         </div>
     </div>

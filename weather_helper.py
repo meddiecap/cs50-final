@@ -4,6 +4,9 @@ weather_helper.py
 Maps open-meteo weather codes and day/night to icon filenames in /static/icons/static/.
 """
 
+from datetime import datetime, timedelta
+import dateutil.parser
+
 # Mapping based on open-meteo weather codes:
 # https://open-meteo.com/en/docs#api_form
 # Adjust as needed to match your icon set and desired granularity.
@@ -132,3 +135,40 @@ def get_weather_simplified(weathercode, is_day=None):
         99: "thunderstorm",
     }
     return code_map.get(weathercode, "unknown")
+
+def hourly_dicts_from_openmeteo(hourly):
+    # Convert parallel lists to list of dicts
+    keys = list(hourly.keys())
+    length = len(hourly[keys[0]])
+    return [
+        {k: hourly[k][i] for k in keys}
+        for i in range(length)
+    ]
+
+
+def filtered_hourly_dicts_from_openmeteo(hourly, start_hour=None, end_hour=None):
+    """
+    Convert parallel lists to list of dicts, filtered by start_hour and end_hour (inclusive).
+    - start_hour, end_hour: datetime objects (local time, matching the timezone of the API call/time strings)
+    Defaults: start_hour = now (rounded down), end_hour = start_hour + 24h
+    """
+    keys = list(hourly.keys())
+    length = len(hourly[keys[0]])
+    # Parse all times to datetime
+    times = [dateutil.parser.isoparse(t) for t in hourly['time']]
+    now = datetime.now().replace(minute=0, second=0, microsecond=0)
+    if start_hour is None:
+        start_hour = now
+    else:
+        start_hour = start_hour.replace(minute=0, second=0, microsecond=0)
+    if end_hour is None:
+        end_hour = start_hour + timedelta(hours=24)
+    else:
+        end_hour = end_hour.replace(minute=0, second=0, microsecond=0)
+    # Build filtered list
+    result = []
+    for i in range(length):
+        t = times[i]
+        if start_hour <= t < end_hour:
+            result.append({k: hourly[k][i] for k in keys})
+    return result

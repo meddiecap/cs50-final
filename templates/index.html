@@ -6,11 +6,11 @@
 		{% if user_location and not user_location.error %}
 		<div class="card shadow-sm mb-4">
 			<div class="card-header bg-success text-white">
-				<h5 class="mb-0">Current weather in {{ user_location.city }}, {{ user_location.country }}*</h5>
+				<h1 class=" h5 mb-0">Current weather in {{ user_location.city }}, {{ user_location.country }}*</h5>
 			</div>
 			<div class="card-body">
 				{% if user_location.weather and user_location.weather.current %}
-                <div class="row">
+                <div class="row mb-4">
                     <div class="col-5 justify-content-between">
                         <h1 class="display-1">{{ user_location.weather.current.temperature_2m }} °C</h1>
                     </div>
@@ -28,11 +28,10 @@
 
 
                 {% if user_hourly_forecast %}
-                <hr>
-                <div class="swiper hourly-forecast-swiper">
+                <div class="swiper hourly-forecast-swiper mb-4">
                     <div class="swiper-wrapper">
                         {% for hour in user_hourly_forecast %}
-                            <div class="swiper-slide">
+                            <div data-original-time="{{ hour.original_time }}" class="swiper-slide">
                                 {% if loop.index0 == 0 %}
                                     now<br>
                                 {% else %}
@@ -52,42 +51,41 @@
                     document.addEventListener('DOMContentLoaded', function() {
                         var swiper = new Swiper(".hourly-forecast-swiper", {
                             slidesPerView: 4,
-                            spaceBetween: 10,
+                            spaceBetween: 0,
                             grabCursor: true,
                             breakpoints: {
                                 640: {
                                     slidesPerView: 4,
-                                    spaceBetween: 20,
+                                    spaceBetween: 0,
                                 },
                                 768: {
                                     slidesPerView: 6,
-                                    spaceBetween: 20,
+                                    spaceBetween: 0,
                                 },
                                 1024: {
                                     slidesPerView: 8,
-                                    spaceBetween: 20,
+                                    spaceBetween: 0,
                                 },
                             },
                         });
                     });                    
                 </script>
 				{% endif %}
-                <hr>
                 <small class="text-muted">* Location is based on your IP address and may not be accurate</small>
 			</div>
 		</div>
 		{% elif user_location and user_location.error %}
 		<div class="alert alert-danger mb-4">{{ user_location.error }}</div>
 		{% endif %}
-		<!-- Main Weather Card -->
+        
 		<div class="card shadow-sm mb-4">
 			<div class="card-header bg-primary text-white">
-                <h5 class="mb-0">The weather in other places</h5>
+                <h2 class="h5 mb-0">The weather in other places</h5>
 			</div>
 			<div class="card-body">
 				<div class="row">
                     {% for c in cities %}
-                        <div class="col-3 mb-4">
+                        <div class="col-6 col-md-4 col-xl-3 mb-4">
                             <a href="/{{ c.city.slug }}" class="card city-card border-0" 
                                 {% if (c.current.description == "sunny") %}
                                     style="background-color: #fff4d4;"
@@ -123,27 +121,6 @@
 	</div>
 </div>
 <script>
-	function generateReport() {
-		const cityName = document.getElementById('city').value;
-		const style = document.getElementById('style').value;
-		fetch('/generate_report', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ city: cityName, style: style })
-		})
-		.then(res => res.json())
-		.then(data => {
-			document.getElementById('reportBox').innerText = data.report;
-			// Show weather table
-			if (data.weather) {
-				document.getElementById('weatherTable').style.display = '';
-				document.getElementById('tempCell').innerText = data.weather.temperature ?? 'N/A';
-				document.getElementById('windCell').innerText = data.weather.windspeed ?? 'N/A';
-				document.getElementById('codeCell').innerText = data.weather.weathercode ?? 'N/A';
-			}
-		});
-	}
-
     document.addEventListener('DOMContentLoaded', function() {
         // on hover .city-card change img.weather-icon src from /static/icons/static/ to /static/icons/animated/
         const cityCards = document.querySelectorAll('.city-card');

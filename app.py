@@ -7,7 +7,7 @@ import zoneinfo
 # Import get_time_period from helpers.py
 from helpers import *
 
-from weather_helper import WEATHER_ICON_MAP, get_weather_icon, get_weather_simplified
+from weather_helper import WEATHER_ICON_MAP, get_weather_icon, get_weather_simplified, hourly_dicts_from_openmeteo, filtered_hourly_dicts_from_openmeteo
 
 # In-memory caches
 ip_location_cache = {}  # {ip: {location and weather data}}
@@ -31,12 +31,10 @@ def index():
 		city["current"]["icon"] = get_weather_icon(city["current"]["weather_code"], city["current"]["is_day"])
 		city['current']['description'] = get_weather_simplified(city["current"]["weather_code"], city["current"]["is_day"])
 		# Set hour:minute to city timezone from city_names
-		city['current']['time'] = datetime.now(zoneinfo.ZoneInfo(city['timezone'])).strftime("%H:%M")
+		city['current']['time'] = datetime.now(zoneinfo.ZoneInfo(city['city']['timezone'])).strftime("%H:%M")
 
 	# Get user IP
 	ip = get_user_ip()
-	if ip and "," in ip:
-		ip = ip.split(",")[0].strip()
 
 	# No caching temporary
 	user_location = None # ip_location_cache.get(ip)
@@ -85,6 +83,7 @@ def index():
 			elif tdt > now:
 				start_idx = i
 				break
+
 		# Always get 24 hours from start_idx
 		end_idx = min(start_idx + 24, len(times))
 		user_hourly_forecast = []
@@ -92,6 +91,7 @@ def index():
 			# format date time to hour
 			hour = times[i].split("T")[1]
 			user_hourly_forecast.append({
+				"original_time": times[i],
 				"time": hour,
 				"temperature": temps[i] if i < len(temps) else None,
 				"windspeed": winds[i] if i < len(winds) else None,
@@ -104,83 +104,103 @@ def index():
 
 	return render_template("index.html", cities=cities_current_weather, styles=styles, user_location=user_location, user_hourly_forecast=user_hourly_forecast)
 
-
-# Endpoint to get weather for arbitrary lat/lon (for user's location)
-@app.route("/weather_at_location")
-def weather_at_location():
-	try:
-		lat = float(request.args.get("lat"))
-		lon = float(request.args.get("lon"))
-	except (TypeError, ValueError):
-		return jsonify({"error": "Invalid or missing lat/lon"}), 400
-	
-	# Use a dummy city dict for get_weather
-	city = {"name": "Your Location", "lat": lat, "lon": lon}
-	weather = get_weather(city)
-
-	return jsonify({"weather": weather})
-
-
 # Route for /<city> to show today's forecast for that city
 @app.route("/<city_name>")
 def city_forecast(city_name):
 	# Find city by name (case-insensitive match) in DB
 	conn = get_db()
 	c = conn.cursor()
-	c.execute('SELECT name, lat, lon FROM cities WHERE lower(name) = ?', (city_name.lower(),))
+	c.execute('SELECT id, name, lat, lon, timezone FROM cities WHERE slug = ?', (city_name.lower(),))
 	row = c.fetchone()
 	conn.close()
 	if not row:
 		return abort(404, description="City not found")
-	city = {"name": row[0], "lat": row[1], "lon": row[2]}
-	weather = get_weather(city)
-	return render_template("city.html", city=city, weather=weather)
 
-@app.route("/generate_report", methods=["POST"])
-def generate_report():
-	data = request.json
-	city_name = data.get("city")
-	style = data.get("style")
+	city = {"id": row[0], "name": row[1], "lat": row[2], "lon": row[3], "timezone": row[4]}
+	weather = get_weather(city, city['timezone'])
 
-	time_period = get_time_period()
-	today = datetime.now().strftime("%Y-%m-%d")
+	# Use city's timezone for current time and find the starting index
+	# of the current hour
+	timezone_str = city["timezone"]
+	tz = zoneinfo.ZoneInfo(timezone_str)
+	now = datetime.now(tz)
 
+	# Prepare 24-hour hourly forecast for user's location (if available)
+	user_hourly_forecast = None
+	if weather and weather.get("hourly"):
+		hourly = weather["hourly"]
+
+		# open-meteo returns arrays: time, temperature_2m, wind_speed_10m, etc.
+		times = hourly.get("time", [])
+		temps = hourly.get("temperature_2m", [])
+		winds = hourly.get("wind_speed_10m", [])
+		wind_directions = hourly.get("wind_direction_10m", [])
+		weather_codes = hourly.get("weather_code", [])
+		is_day_flags = hourly.get("is_day", [])  # 1 for day, 0 for night
+
+		start_idx = 0
+		for i, t in enumerate(times):
+			tdt = dateutil.parser.isoparse(t)
+			if tdt.tzinfo is None:
+				tdt = tdt.replace(tzinfo=tz)
+			# Find the first hour that is >= current hour (rounded down)
+			if tdt.hour == now.hour and tdt.date() == now.date():
+				start_idx = i
+				break
+			elif tdt > now:
+				start_idx = i
+				break
+
+		# Always get 24 hours from start_idx
+		end_idx = min(start_idx + 24, len(times))
+		user_hourly_forecast = []
+		for i in range(start_idx, end_idx):
+			# change hour format to 12-hour format
+			hour = times[i].split("T")[1]
+			user_hourly_forecast.append({
+				"original_time": times[i],
+				"time": hour,
+				"temperature": temps[i] if i < len(temps) else None,
+				"windspeed": winds[i] if i < len(winds) else None,
+				"beaufort": beaufort_scale(winds[i]) if i < len(winds) else None,
+				"winddirection": wind_directions[i] if i < len(wind_directions) else None,
+				"cardinal": wind_direction_cardinal(wind_directions[i]) if i < len(wind_directions) else None,
+				"weather_code": weather_codes[i] if i < len(weather_codes) else None,
+				"icon": get_weather_icon(weather_codes[i], is_day=is_day_flags[i]) if i < len(weather_codes) else None
+			})
+			
 	# Get city_id, lat, lon and style_id from DB
 	conn = get_db()
 	c = conn.cursor()
-	c.execute('SELECT id, lat, lon FROM cities WHERE name = ?', (city_name,))
-	city_row = c.fetchone()
-	c.execute('SELECT id FROM styles WHERE name = ?', (style,))
+	c.execute('SELECT id, name FROM styles WHERE name = ?', ("Normal Weather Report Style",))
 	style_row = c.fetchone()
-	if not city_row or not style_row:
-		conn.close()
-		return jsonify({"error": "City or style not found in DB"}), 400
-	city_id, lat, lon = city_row[0], city_row[1], city_row[2]
 	style_id = style_row[0]
+	style_name = style_row[1]
+
+	time_period = get_time_period_from_json(weather)
+	today = now.strftime("%Y-%m-%d")
 
 	# Check for cached report in DB
 	c.execute('''SELECT weather_json, report_text FROM weather_reports
 				WHERE city_id = ? AND style_id = ? AND time_period = ? AND date = ?''',
-			  (city_id, style_id, time_period, today))
+			  (city["id"], style_id, time_period, today))
 	row = c.fetchone()
+
 	if row:
 		# Cached report found
-		weather = json.loads(row[0])
 		report = row[1]
-		conn.close()
-		return jsonify({"report": report, "weather": weather, "cached": True})
+	else:
+		# Not cached, call API and store
+		report = call_llm_api(city["name"], weather, style_name)
+		c.execute('''INSERT INTO weather_reports (city_id, style_id, time_period, date, weather_json, report_text)
+					VALUES (?, ?, ?, ?, ?, ?)''',
+				(city["id"], style_id, time_period, today, json.dumps(weather), report))
+		conn.commit()
 
-	# Not cached, call API and store
-	city = {"name": city_name, "lat": lat, "lon": lon}
-	weather = get_weather(city)
-	report = call_llm_api(city_name, weather, style)
-	c.execute('''INSERT INTO weather_reports (city_id, style_id, time_period, date, weather_json, report_text)
-				VALUES (?, ?, ?, ?, ?, ?)''',
-			  (city_id, style_id, time_period, today, json.dumps(weather), report))
-	conn.commit()
-	conn.close()
+	conn.close()	
 
-	return jsonify({"report": report, "weather": weather, "cached": False})
+	return render_template("city.html", city=city, report=report, weather=weather, user_hourly_forecast=user_hourly_forecast)
+
 
 if __name__ == "__main__":
 	app.run(debug=True)
