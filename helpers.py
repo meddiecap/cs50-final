@@ -44,11 +44,11 @@ def get_user_location(ip):
 
 def get_time_period():
     hour = datetime.now().hour
-    if 5 <= hour < 11:
+    if 0 <= hour < 11:
         return "morning"
     elif 11 <= hour < 18:
         return "midday"
-    elif 18 <= hour < 21:
+    elif 18 <= hour < 22:
         return "evening"
     else:
         return "night"
@@ -56,22 +56,14 @@ def get_time_period():
 def get_time_period_from_json(weather_json):
     current_time = datetime.fromisoformat(weather_json["current"]["time"])
     hour = current_time.hour
-    if 5 <= hour < 11:
+    if 0 <= hour < 11:
         return "morning"
     elif 11 <= hour < 18:
         return "midday"
-    elif 18 <= hour < 21:
+    elif 18 <= hour < 22:
         return "evening"
     else:
         return "night"
-
-def opening_token(city, time_period, tomorrow_date):
-    if time_period in ("evening", "night"):
-        return f"Tomorrow, {tomorrow_date},"
-    if time_period == "midday":
-        return "This afternoon,"
-    # morning:
-    return f"Good morning, {city}!"
 
 def get_weather(city, timezone_str="America/Los_Angeles"):
     tz_param = quote(timezone_str)
@@ -164,8 +156,8 @@ def call_llm_api(city, weather, style):
     # always use the locations local time, not the user's local time.
     tz = zoneinfo.ZoneInfo(weather["timezone"])
     now = datetime.now(tz)
-    local_date = now.strftime("%Y-%m-%d")
-    tomorrow_date = (now + timedelta(days=1)).strftime("%Y-%m-%d")
+    local_date = now.strftime("%Y-%m-%d, %A")
+    tomorrow_date = (now + timedelta(days=1)).strftime("%Y-%m-%d, %A")
 
     # only include relevant style instructions
     prompt_style_instructions = STYLE_INSTRUCTIONS.get(style, "")
