@@ -74,7 +74,31 @@ Although any programming language could be used, I decided to stick to Python. P
    - A config.json file is provided that contains the cities (including coordinates and timezone) and the available styles.
    - A db_init.py scripts create the database, various tables and inserts the data from the config file.
 
-## Technologies Used
+### Project File Overview
+   - app.py: The main Flask application. Handles routing, user authentication, weather data fetching, report generation, and rendering templates.
+   - helpers.py: Contains utility functions for weather API calls, AI prompt construction, user location, and formatting.
+   - weather_helper.py: Maps weather codes to icons and descriptions, and provides functions for processing and grouping weather data.
+   - db_init.py: Initializes the SQLite database, creates tables, and populates cities and styles from config.json.
+   - config.json: Stores city and style configuration data.
+   - templates/: Contains all Jinja2 HTML templates for the site, including layout.html (base template), index.html (homepage), city.html (city weather page), login.html, and register.html.
+   - static/: Contains static assets such as CSS, JS, and SVG weather icons.
+
+### Design Decisions
+   - Framework Choice: Flask was chosen because I used it in the problem sets. It's used for handling routing, session, redirect and creating URLs.
+   - Database: SQLite provides a lightweight, file-based database that is easy to set up and maintain for small to medium projects.
+   - Caching: Weather reports are cached in the database to minimize API and LLM calls, improving performance and reducing costs.
+   - User Management: User authentication is implemented with hashed passwords and session management for security and personalization.
+   - Prompt Engineering: The AI prompt is modular, with style instructions managed in Python for maintainability and consistency.
+   - UI/UX: Bootstrap 5 ensures a responsive, modern interface. Tabbed content and carousels enhance usability.
+   - Extensibility: The project is designed to be easily extended with new cities or styles thanks to its configuration-based setup.
+
+### Challenges and Future Improvements
+   - Integrating the LLM required careful prompt engineering to ensure consistent, high-quality output.
+   - Handling timezones turned out to be fairly easy as the Open Meteo API allows for a timezone option. In earlier versions I did not store the cities timezone which made gave sunny weather in the middle of the night.
+   - Future improvements could include user profile pages, more granular weather data, additional report styles, and admin tools for managing cities and styles.
+   - The fashion report can be more personalised with users preference to colors, fabrics and overall preferred style.
+
+### Technologies Used
 - Python 3
 - Flask
 - SQLite
@@ -84,7 +108,7 @@ Although any programming language could be used, I decided to stick to Python. P
 - Flask-Session
 - Jinja2 Templates
 
-## Third Party Tools
+### Third Party Tools
 - Bootstrap 5: https://getbootstrap.com/
 - AI for writing weather reports (Google Gemini): https://ai.google.dev/
 - Carousel Hourly Forecast: https://swiperjs.com/
