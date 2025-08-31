@@ -68,7 +68,7 @@ def get_time_period_from_json(weather_json):
 def get_weather(city, timezone_str="America/Los_Angeles"):
     tz_param = quote(timezone_str)
     url = (
-        f"https://api.open-meteo.com/v1/forecast?latitude={city['lat']}&longitude={city['lon']}"
+        f"http://api.open-meteo.com/v1/forecast?latitude={city['lat']}&longitude={city['lon']}"
         f"&current=temperature_2m,wind_direction_10m,wind_speed_10m,pressure_msl,relative_humidity_2m,weather_code"
         f"&hourly=wind_speed_10m,wind_direction_10m,temperature_2m,weather_code,is_day"
         f"&timezone={tz_param}&forecast_days=2"
@@ -96,7 +96,7 @@ def get_current_weather(city, timezone_str="America/Los_Angeles"):
 
     tz_param = quote(timezone_str)
     url = (
-        f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
+        f"http://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
         f"&current=temperature_2m,wind_direction_10m,wind_speed_10m,pressure_msl,relative_humidity_2m,weather_code,is_day"
         f"&timezone={tz_param}"
     )
