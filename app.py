@@ -113,20 +113,32 @@ def index():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        # Validate, check for existing user, etc.
-        password_hash = generate_password_hash(password)
-        # Insert into DB...
-        conn = get_db()
-        c = conn.cursor()
-        c.execute('INSERT INTO users (username, password_hash) VALUES (?, ?)', (username, password_hash))
-        conn.commit()
-        conn.close()
-        flash('Registration successful! Please log in.', 'success')
-        return redirect(url_for('login'))
-    return render_template('register.html')
+	if request.method == 'POST':
+		username = request.form['username']
+		password = request.form['password']
+		# Validate, check for existing user, etc.
+		if not username or not password:
+			flash('Username and password are required.', 'danger')
+			return render_template('register.html')
+
+		conn = get_db()
+		c = conn.cursor()
+		c.execute('SELECT * FROM users WHERE username = ?', (username,))
+		existing_user = c.fetchone()
+
+		if existing_user:
+			flash('Username already exists. Please choose another one.', 'danger')
+			return render_template('register.html')
+
+		password_hash = generate_password_hash(password)
+		# Insert into DB...
+		c = conn.cursor()
+		c.execute('INSERT INTO users (username, password_hash) VALUES (?, ?)', (username, password_hash))
+		conn.commit()
+		conn.close()
+		flash('Registration successful! Please log in.', 'success')
+		return redirect(url_for('login'))
+	return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
