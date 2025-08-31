@@ -161,7 +161,6 @@ def city_forecast(city_name):
 	c = conn.cursor()
 	c.execute('SELECT id, name, lat, lon, timezone FROM cities WHERE slug = ?', (city_name.lower(),))
 	row = c.fetchone()
-	conn.close()
 	if not row:
 		return abort(404, description="City not found")
 
@@ -219,7 +218,6 @@ def city_forecast(city_name):
 			})
 			
 	# Get all styles ordered by position
-	conn = get_db()
 	c = conn.cursor()
 	c.execute('SELECT id, name, position FROM styles ORDER BY position ASC')
 	styles = [dict(id=row[0], name=row[1], position=row[2]) for row in c.fetchall()]
@@ -276,15 +274,12 @@ def generate_report():
 	c.execute('SELECT id, name, lat, lon, timezone FROM cities WHERE id = ?', (city_id,))
 	row = c.fetchone()
 	city = {"id": row[0], "name": row[1], "lat": row[2], "lon": row[3], "timezone": row[4]}
-	conn.close()
 
 	# Get style from database
-	conn = get_db()
 	c = conn.cursor()
 	c.execute('SELECT name FROM styles WHERE id = ?', (style_id,))
 	row = c.fetchone()
 	style = {"id": style_id, "name": row[0]} if row else None
-	conn.close()
 	
 	# Use city's timezone for current time and find the starting index
 	# of the current hour
@@ -298,24 +293,22 @@ def generate_report():
 	time_period = get_time_period_from_json(weather)
 	today = now.strftime("%Y-%m-%d")
 
-	# get the weather
-	conn = get_db()
+	# remove the existing report if it exists
 	c = conn.cursor()
-	c.execute('SELECT report_text FROM weather_reports WHERE user_id = ? AND city_id = ? AND style_id = ? AND time_period = ? AND date = ?', (session.get('user_id'), city["id"], style["id"], time_period, today))
-	row = c.fetchone()
-	report = row[0] if row else None
-	conn.close()
+	c.execute('DELETE FROM weather_reports WHERE user_id = ? AND city_id = ? AND style_id = ? AND time_period = ? AND date = ?',
+				(session.get('user_id'), city["id"], style["id"], time_period, today))
+	conn.commit()
 
-	if report is None:
-		# generate report
-		report = call_llm_api(city["name"], weather, style["name"])
-		# store it in the database
-		conn = get_db()
-		c = conn.cursor()
-		c.execute('INSERT INTO weather_reports (user_id, city_id, style_id, time_period, date, weather_json, report_text) VALUES (?, ?, ?, ?, ?, ?, ?)',
-				  (session.get('user_id'), city["id"], style["id"], time_period, today, json.dumps(weather), report))
-		conn.commit()
-		conn.close()
+	# generate report
+	report = call_llm_api(city["name"], weather, style["name"])
+
+	# store it in the database
+	c = conn.cursor()
+	c.execute('INSERT INTO weather_reports (user_id, city_id, style_id, time_period, date, weather_json, report_text) VALUES (?, ?, ?, ?, ?, ?, ?)',
+				(session.get('user_id'), city["id"], style["id"], time_period, today, json.dumps(weather), report))
+	conn.commit()
+	conn.close()
+		
 
 	return jsonify({"success": True, "report": report})
 
